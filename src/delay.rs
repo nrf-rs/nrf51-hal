@@ -5,7 +5,7 @@ use nrf51::TIMER0;
 
 use hal::blocking::delay::{DelayMs, DelayUs};
 
-/// System timer (SysTick) as a delay provider
+/// System timer `TIMER0` as a delay provider
 pub struct Delay {
     timer: TIMER0,
 }
