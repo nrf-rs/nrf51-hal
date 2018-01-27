@@ -256,12 +256,32 @@ macro_rules! gpio {
                         unsafe { (*GPIO::ptr()).outclr.write(|w| w.bits(1 << $i)) }
                     }
                 }
+
+                impl<MODE> $PXi<Input<MODE>> {
+                    /// Erases the pin number from the type
+                    ///
+                    /// This is useful when you want to collect the pins into an array where you
+                    /// need all the elements to have the same type
+                    pub fn downgrade(self) -> $PXx<Input<MODE>> {
+                        $PXx {
+                            i: $i,
+                            _mode: self._mode,
+                        }
+                    }
+                }
             )+
+
+                impl<TYPE> $PXx<TYPE> {
+                    pub fn get_id (&self) -> u8
+                    {
+                        self.i
+                    }
+                }
         }
     }
 }
 
-gpio!(GPIO, gpio, PINx, [
+gpio!(GPIO, gpio, PIN, [
     PIN0: (pin0, 0, Input<Floating>),
     PIN1: (pin1, 1, Input<Floating>),
     PIN2: (pin2, 2, Input<Floating>),
