@@ -4,6 +4,7 @@
 #![cfg_attr(feature="rt",feature(used))]
 #![feature(const_fn)]
 #![allow(non_camel_case_types)]
+#![feature(never_type)]
 
 extern crate cast;
 extern crate cortex_m;
@@ -15,3 +16,4 @@ pub extern crate nrf51;
 pub mod delay;
 pub mod gpio;
 pub mod prelude;
+pub mod serial;
