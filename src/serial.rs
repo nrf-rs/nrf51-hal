@@ -38,12 +38,10 @@ impl Serial<UART0> {
         speed: BAUDRATEW,
     ) -> Self {
         /* Tell UART which pins to use for sending and receiving */
-        uart.pseltxd.write(
-            |w| unsafe { w.bits(txpin.get_id().into()) },
-        );
-        uart.pselrxd.write(
-            |w| unsafe { w.bits(rxpin.get_id().into()) },
-        );
+        uart.pseltxd
+            .write(|w| unsafe { w.bits(txpin.get_id().into()) });
+        uart.pselrxd
+            .write(|w| unsafe { w.bits(rxpin.get_id().into()) });
 
         /* Set baud rate */
         uart.baudrate.write(|w| w.baudrate().variant(speed));
@@ -66,7 +64,6 @@ impl Serial<UART0> {
         (Tx { _uart: PhantomData }, Rx { _uart: PhantomData })
     }
 }
-
 
 impl hal::serial::Read<u8> for Rx<UART0> {
     type Error = Error;

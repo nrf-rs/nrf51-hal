@@ -33,7 +33,6 @@ pub struct PushPull;
 /// Open drain output (type state)
 pub struct OpenDrain;
 
-
 macro_rules! gpio {
     ($GPIOX:ident, $gpiox:ident, $PXx:ident, [
         $($PXi:ident: ($pxi:ident, $i:expr, $MODE:ty),)+
