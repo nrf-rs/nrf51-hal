@@ -12,11 +12,11 @@ keywords = [
     "hal",
 ]
 name = "nrf51-hal"
-version = "0.1.0"
+version = "0.1.1"
 
 [dependencies]
 bare-metal = "0.1.1"
-cortex-m = "0.4.2"
+cortex-m = "0.4.3"
 embedded-hal = "0.1.0"
 nb = "0.1.1"
 
