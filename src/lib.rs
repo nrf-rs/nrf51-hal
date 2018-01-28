@@ -9,11 +9,12 @@
 extern crate bare_metal;
 extern crate cast;
 extern crate cortex_m;
-extern crate embedded_hal as hal;
+pub extern crate embedded_hal as hal;
 extern crate nb;
 pub extern crate nrf51;
 
 pub mod delay;
 pub mod gpio;
+pub mod i2c;
 pub mod prelude;
 pub mod serial;
