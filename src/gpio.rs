@@ -18,10 +18,15 @@ pub struct Input<MODE> {
 
 /// Floating input (type state)
 pub struct Floating;
+
 /// Pulled down input (type state)
 pub struct PullDown;
+
 /// Pulled up input (type state)
 pub struct PullUp;
+
+/// Open drain input or output (type state)
+pub struct OpenDrain;
 
 /// Output mode (type state)
 pub struct Output<MODE> {
@@ -30,8 +35,6 @@ pub struct Output<MODE> {
 
 /// Push pull output (type state)
 pub struct PushPull;
-/// Open drain output (type state)
-pub struct OpenDrain;
 
 macro_rules! gpio {
     ($GPIOX:ident, $gpiox:ident, $PXx:ident, [
@@ -113,6 +116,26 @@ macro_rules! gpio {
                                 .input()
                                 .drive()
                                 .s0s1()
+                                .pull()
+                                .disabled()
+                                .sense()
+                                .disabled()
+                                .input()
+                                .connect()
+                        });
+                        $PXi { _mode: PhantomData }
+                    }
+
+                    /// Configures the pin to operate as a open drain input pin
+                    pub fn into_open_drain_input(
+                        self,
+                    ) -> $PXi<Input<OpenDrain>> {
+                        let pincnf = unsafe { &(*GPIO::ptr()).pin_cnf[$i] };
+                        pincnf.write(|w| {
+                            w.dir()
+                                .input()
+                                .drive()
+                                .s0d1()
                                 .pull()
                                 .disabled()
                                 .sense()
