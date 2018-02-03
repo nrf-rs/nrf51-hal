@@ -12,7 +12,10 @@ pub struct I2c<I2C> {
 }
 
 #[derive(Debug)]
-pub enum Error {}
+pub enum Error {
+    OVERRUN,
+    NACK,
+}
 
 impl I2c<TWI1> {
     pub fn i2c1(i2c: TWI1, sdapin: PIN<Input<OpenDrain>>, sclpin: PIN<Input<OpenDrain>>) -> Self {
@@ -35,6 +38,81 @@ impl I2c<TWI1> {
     pub fn release(self) -> (TWI1, PIN<Input<OpenDrain>>, PIN<Input<OpenDrain>>) {
         (self.i2c, self.sdapin, self.sclpin)
     }
+
+    fn send_byte(&self, byte: &u8) -> Result<(), Error> {
+        let twi = &self.i2c;
+
+        /* Clear sent event */
+        twi.events_txdsent.write(|w| unsafe { w.bits(0) });
+
+        /* Copy data into the send buffer */
+        twi.txd.write(|w| unsafe { w.bits(*byte as u32) });
+
+        /* Start data transmission */
+        twi.tasks_starttx.write(|w| unsafe { w.bits(1) });
+
+        /* Wait until transmission was confirmed */
+        while twi.events_txdsent.read().bits() == 0 {
+            /* Bail out if we get an error instead */
+            if twi.events_error.read().bits() != 0 {
+                twi.events_error.write(|w| unsafe { w.bits(0) });
+                return Err(Error::NACK);
+            }
+        }
+
+        /* Clear sent event */
+        twi.events_txdsent.write(|w| unsafe { w.bits(0) });
+
+        Ok(())
+    }
+
+    fn recv_byte(&self) -> Result<u8, Error> {
+        let twi = &self.i2c;
+
+        /* Clear reception event */
+        twi.events_rxdready.write(|w| unsafe { w.bits(0) });
+
+        /* Start data reception */
+        twi.tasks_startrx.write(|w| unsafe { w.bits(1) });
+
+        /* Wait until something ended up in the buffer */
+        while twi.events_rxdready.read().bits() == 0 {
+            /* Bail out if it's an error instead of data */
+            if twi.events_error.read().bits() != 0 {
+                twi.events_error.write(|w| unsafe { w.bits(0) });
+                return Err(Error::OVERRUN);
+            }
+        }
+
+        /* Read out data */
+        let out = twi.rxd.read().bits() as u8;
+
+        /* Clear reception event */
+        twi.events_rxdready.write(|w| unsafe { w.bits(0) });
+
+        Ok(out)
+    }
+
+    fn send_stop(&self) -> Result<(), Error> {
+        let twi = &self.i2c;
+
+        /* Clear stopped event */
+        twi.events_stopped.write(|w| unsafe { w.bits(0) });
+
+        /* Start stop condition */
+        twi.tasks_stop.write(|w| unsafe { w.bits(1) });
+
+        /* Wait until stop was sent */
+        while twi.events_stopped.read().bits() == 0 {
+            /* Bail out if we get an error instead */
+            if twi.events_error.read().bits() != 0 {
+                twi.events_error.write(|w| unsafe { w.bits(0) });
+                return Err(Error::NACK);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl WriteRead for I2c<TWI1> {
@@ -43,37 +121,38 @@ impl WriteRead for I2c<TWI1> {
     fn write_read(&mut self, addr: u8, bytes: &[u8], buffer: &mut [u8]) -> Result<(), Error> {
         let twi = &self.i2c;
 
+        /* Make sure all previously used shortcuts are disabled */
+        twi.shorts
+            .write(|w| w.bb_stop().disabled().bb_suspend().disabled());
+
         /* Request data */
         twi.address.write(|w| unsafe { w.address().bits(addr) });
-        twi.tasks_starttx.write(|w| unsafe { w.bits(1) });
 
+        /* Send out all bytes in the outgoing buffer */
         for out in bytes {
-            twi.txd.write(|w| unsafe { w.bits(*out as u32) });
-            while twi.events_txdsent.read().bits() == 0 {}
-            twi.events_txdsent.write(|w| unsafe { w.bits(0) });
+            let _ = self.send_byte(&out)?;
         }
 
         /* Turn around to read data */
-        twi.shorts.write(|w| w.bb_suspend().enabled());
-        twi.tasks_startrx.write(|w| unsafe { w.bits(1) });
-
         if let Some((last, before)) = buffer.split_last_mut() {
+            /* If we want to read multiple bytes we need to use the suspend mode */
+            if before.len() != 0 {
+                twi.shorts.write(|w| w.bb_suspend().enabled());
+            }
+
             for in_ in &mut before.into_iter() {
-                while twi.events_rxdready.read().bits() == 0 {}
-                *in_ = twi.rxd.read().bits() as u8;
-                twi.events_rxdready.write(|w| unsafe { w.bits(0) });
+                *in_ = self.recv_byte()?;
+
                 twi.tasks_resume.write(|w| unsafe { w.bits(1) });
             }
 
-            twi.shorts.write(|w| w.bb_stop().enabled());
-            twi.tasks_resume.write(|w| unsafe { w.bits(1) });
+            twi.shorts
+                .write(|w| w.bb_suspend().disabled().bb_stop().enabled());
 
-            while twi.events_rxdready.read().bits() == 0 {}
-            *last = twi.rxd.read().bits() as u8;
-            twi.events_rxdready.write(|w| unsafe { w.bits(0) });
+            *last = self.recv_byte()?;
         }
 
-        twi.tasks_stop.write(|w| unsafe { w.bits(1) });
+        self.send_stop()?;
         Ok(())
     }
 }
@@ -84,17 +163,20 @@ impl Write for I2c<TWI1> {
     fn write(&mut self, addr: u8, bytes: &[u8]) -> Result<(), Error> {
         let twi = &self.i2c;
 
-        twi.address.write(|w| unsafe { w.address().bits(addr) });
-        twi.tasks_starttx.write(|w| unsafe { w.bits(1) });
+        /* Make sure all previously used shortcuts are disabled */
+        twi.shorts
+            .write(|w| w.bb_stop().disabled().bb_suspend().disabled());
 
+        /* Set Slave I2C address */
+        twi.address.write(|w| unsafe { w.address().bits(addr) });
+
+        /* Clock out all bytes */
         for in_ in bytes.into_iter() {
-            twi.txd.write(|w| unsafe { w.bits(*in_ as u32) });
-            while twi.events_txdsent.read().bits() == 0 {}
-            twi.events_txdsent.write(|w| unsafe { w.bits(0) });
+            self.send_byte(in_)?;
         }
 
-        twi.tasks_stop.write(|w| unsafe { w.bits(1) });
-
+        /* Send stop */
+        self.send_stop()?;
         Ok(())
     }
 }
