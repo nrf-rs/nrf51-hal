@@ -12,7 +12,7 @@ keywords = [
     "hal",
 ]
 name = "nrf51-hal"
-version = "0.2.6"
+version = "0.3.0"
 
 [dependencies]
 bare-metal = "0.1.1"
@@ -31,6 +31,7 @@ git = "https://github.com/therealprof/nrf51"
 [features]
 default = ["rt"]
 rt = []
+
 [profile.dev]
 debug = true
 lto = true

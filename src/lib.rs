@@ -18,3 +18,4 @@ pub mod gpio;
 pub mod i2c;
 pub mod prelude;
 pub mod serial;
+pub mod rng;
