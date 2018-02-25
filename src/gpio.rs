@@ -44,7 +44,7 @@ macro_rules! gpio {
         pub mod $gpiox {
             use core::marker::PhantomData;
 
-            use hal::digital::OutputPin;
+            use hal::digital::{InputPin, OutputPin};
             use nrf51::$GPIOX;
 
             use super::{
@@ -96,6 +96,17 @@ macro_rules! gpio {
                 fn set_low(&mut self) {
                     // NOTE(unsafe) atomic write to a stateless register
                     unsafe { (*GPIO::ptr()).outclr.write(|w| w.bits(1 << self.i)) }
+                }
+            }
+
+            impl<MODE> InputPin for $PXx<Input<MODE>> {
+                fn is_high(&self) -> bool {
+                    !self.is_low()
+                }
+
+                fn is_low(&self) -> bool {
+                    // NOTE(unsafe) atomic read with no side effects
+                    unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << self.i) == 0 }
                 }
             }
 
@@ -289,6 +300,17 @@ macro_rules! gpio {
                             i: $i,
                             _mode: self._mode,
                         }
+                    }
+                }
+
+                impl<MODE> InputPin for $PXi<Input<MODE>> {
+                    fn is_high(&self) -> bool {
+                        !self.is_low()
+                    }
+
+                    fn is_low(&self) -> bool {
+                        // NOTE(unsafe) atomic read with no side effects
+                        unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << $i) == 0 }
                     }
                 }
             )+
