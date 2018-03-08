@@ -85,7 +85,7 @@ macro_rules! gpio {
 
                 fn is_low(&self) -> bool {
                     // NOTE(unsafe) atomic read with no side effects
-                    unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << self.i) == 0 }
+                    unsafe { (*GPIO::ptr()).out.read().bits() & (1 << self.i) == 0 }
                 }
 
                 fn set_high(&mut self) {
@@ -275,7 +275,7 @@ macro_rules! gpio {
 
                     fn is_low(&self) -> bool {
                         // NOTE(unsafe) atomic read with no side effects
-                        unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << $i) == 0 }
+                        unsafe { (*GPIO::ptr()).out.read().bits() & (1 << $i) == 0 }
                     }
 
                     fn set_high(&mut self) {
