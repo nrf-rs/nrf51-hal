@@ -46,7 +46,7 @@ impl I2c<TWI1> {
         twi.events_txdsent.write(|w| unsafe { w.bits(0) });
 
         /* Copy data into the send buffer */
-        twi.txd.write(|w| unsafe { w.bits(*byte as u32) });
+        twi.txd.write(|w| unsafe { w.bits(u32::from(*byte)) });
 
         /* Start data transmission */
         twi.tasks_starttx.write(|w| unsafe { w.bits(1) });
@@ -130,13 +130,13 @@ impl WriteRead for I2c<TWI1> {
 
         /* Send out all bytes in the outgoing buffer */
         for out in bytes {
-            let _ = self.send_byte(&out)?;
+            self.send_byte(out)?;
         }
 
         /* Turn around to read data */
         if let Some((last, before)) = buffer.split_last_mut() {
             /* If we want to read multiple bytes we need to use the suspend mode */
-            if before.len() != 0 {
+            if !before.is_empty() {
                 twi.shorts.write(|w| w.bb_suspend().enabled());
             }
 
@@ -171,7 +171,7 @@ impl Write for I2c<TWI1> {
         twi.address.write(|w| unsafe { w.address().bits(addr) });
 
         /* Clock out all bytes */
-        for in_ in bytes.into_iter() {
+        for in_ in bytes {
             self.send_byte(in_)?;
         }
 
