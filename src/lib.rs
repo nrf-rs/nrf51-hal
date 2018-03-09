@@ -5,6 +5,7 @@
 #![feature(const_fn)]
 #![allow(non_camel_case_types)]
 #![feature(never_type)]
+#![feature(duration_extras)]
 
 extern crate bare_metal;
 extern crate cast;
@@ -19,3 +20,4 @@ pub mod i2c;
 pub mod prelude;
 pub mod serial;
 pub mod rng;
+pub mod timer;
