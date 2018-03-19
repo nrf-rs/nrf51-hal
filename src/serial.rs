@@ -37,19 +37,22 @@ impl Serial<UART0> {
         rxpin: PIN<Input<Floating>>,
         speed: BAUDRATEW,
     ) -> Self {
-        /* Tell UART which pins to use for sending and receiving */
+        // Fill register with dummy data to trigger txd event
+        uart.txd.write(|w| unsafe { w.bits(0) });
+
+        // Set output TXD and RXD pins
         uart.pseltxd
             .write(|w| unsafe { w.bits(txpin.get_id().into()) });
         uart.pselrxd
             .write(|w| unsafe { w.bits(rxpin.get_id().into()) });
 
-        /* Set baud rate */
+        // Set baud rate
         uart.baudrate.write(|w| w.baudrate().variant(speed));
 
-        /* Enable UART function */
+        // Enable UART function
         uart.enable.write(|w| w.enable().enabled());
 
-        /* Fire up transmitting and receiving task */
+        // Fire up transmitting and receiving task
         uart.tasks_starttx.write(|w| unsafe { w.bits(1) });
         uart.tasks_startrx.write(|w| unsafe { w.bits(1) });
 
@@ -68,16 +71,18 @@ impl Serial<UART0> {
 impl hal::serial::Read<u8> for Rx<UART0> {
     type Error = Error;
 
-    fn read(&mut self) -> nb::Result<u8, Error> {
-        match unsafe { (*UART0::ptr()).events_rxdrdy.read().bits() } {
+    fn read(&mut self) -> nb::Result<u8, Self::Error> {
+        let uart = unsafe { &*UART0::ptr() };
+        match uart.events_rxdrdy.read().bits() {
             0 => Err(nb::Error::WouldBlock),
             _ => {
-                /* We're going to pick up the data soon, let's signal the buffer is already waiting for
-                 * more data */
-                unsafe { (*UART0::ptr()).events_rxdrdy.write(|w| w.bits(0)) };
+                // Read one 8bit value
+                let byte = uart.rxd.read().bits() as u8;
 
-                /* Read one 8bit value */
-                Ok(unsafe { (*UART0::ptr()).rxd.read().bits() } as u8)
+                // Reset ready for receive event
+                unsafe { uart.events_rxdrdy.write(|w| w.bits(0)) };
+
+                Ok(byte)
             }
         }
     }
@@ -86,19 +91,24 @@ impl hal::serial::Read<u8> for Rx<UART0> {
 impl hal::serial::Write<u8> for Tx<UART0> {
     type Error = !;
 
-    fn flush(&mut self) -> nb::Result<(), !> {
+    fn flush(&mut self) -> nb::Result<(), Self::Error> {
         Ok(())
     }
 
-    fn write(&mut self, byte: u8) -> nb::Result<(), !> {
-        /* Write one 8bit value */
-        unsafe { (*UART0::ptr()).txd.write(|w| w.bits(u32::from(byte))) }
+    fn write(&mut self, byte: u8) -> nb::Result<(), Self::Error> {
+        let uart = unsafe { &*UART0::ptr() };
+        // Are we ready for sending out next byte?
+        if uart.events_txdrdy.read().bits() == 1 {
+            // Send byte
+            uart.txd.write(|w| unsafe { w.bits(u32::from(byte)) });
 
-        /* Wait until written ... */
-        while unsafe { (*UART0::ptr()).events_txdrdy.read().bits() } == 0 {}
+            // Reset ready for transmit event
+            uart.events_txdrdy.reset();
 
-        /* ... and clear read bit, there's no other way this will work */
-        unsafe { (*UART0::ptr()).events_txdrdy.write(|w| w.bits(0)) };
-        Ok(())
+            Ok(())
+        } else {
+            // We're not ready, tell application to try again
+            Err(nb::Error::WouldBlock)
+        }
     }
 }

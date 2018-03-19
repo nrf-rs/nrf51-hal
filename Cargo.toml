@@ -16,7 +16,7 @@ keywords = [
 license = "0BSD"
 name = "nrf51-hal"
 repository = "https://github.com/therealprof/nrf51-hal"
-version = "0.4.2"
+version = "0.4.3"
 
 [dependencies]
 bare-metal = "0.1.1"
