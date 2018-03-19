@@ -80,7 +80,7 @@ impl hal::serial::Read<u8> for Rx<UART0> {
                 let byte = uart.rxd.read().bits() as u8;
 
                 // Reset ready for receive event
-                unsafe { uart.events_rxdrdy.write(|w| w.bits(0)) };
+                uart.events_rxdrdy.reset();
 
                 Ok(byte)
             }
