@@ -1,6 +1,8 @@
 use core::marker::PhantomData;
+use core::fmt::{Write, Result};
 
 use hal;
+use hal::prelude::*;
 use nb;
 
 use nrf51::UART0;
@@ -110,5 +112,18 @@ impl hal::serial::Write<u8> for Tx<UART0> {
             // We're not ready, tell application to try again
             Err(nb::Error::WouldBlock)
         }
+    }
+}
+
+impl<UART> Write for Tx<UART>
+where
+    Tx<UART>: hal::serial::Write<u8>,
+{
+    fn write_str(&mut self, s: &str) -> Result {
+        let _ = s.as_bytes()
+            .into_iter()
+            .map(|c| block!(self.write(*c)))
+            .last();
+        Ok(())
     }
 }
