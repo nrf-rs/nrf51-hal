@@ -1,6 +1,5 @@
 #![no_std]
 #![cfg_attr(feature = "rt", feature(global_asm))]
-#![cfg_attr(feature = "rt", feature(macro_reexport))]
 #![cfg_attr(feature = "rt", feature(used))]
 #![feature(const_fn)]
 #![allow(non_camel_case_types)]
