@@ -1,8 +1,10 @@
 use core::time::Duration;
 use core::u32;
 
-use nb::{Error, Result};
+use void::Void;
+
 use hal::timer::{CountDown, Periodic};
+use nb::{Error, Result};
 use nrf51::TIMER0;
 
 pub struct Timer(TIMER0);
@@ -37,7 +39,7 @@ impl CountDown for Timer {
         self.0.tasks_start.write(|w| unsafe { w.bits(1) });
     }
 
-    fn wait(&mut self) -> Result<(), !> {
+    fn wait(&mut self) -> Result<(), Void> {
         if self.0.events_compare[0].read().bits() == 1 {
             self.0.events_compare[0].reset();
             Ok(())

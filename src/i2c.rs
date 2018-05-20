@@ -1,6 +1,6 @@
-use nrf51::TWI1;
 use gpio::gpio::PIN;
 use gpio::{Input, OpenDrain};
+use nrf51::TWI1;
 
 use hal::blocking::i2c::{Write, WriteRead};
 
