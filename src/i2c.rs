@@ -39,6 +39,14 @@ impl I2c<TWI1> {
         (self.i2c, self.sdapin, self.sclpin)
     }
 
+    fn send_start(&self) -> Result<(), Error> {
+        let twi = &self.i2c;
+
+        /* Start data transmission */
+        twi.tasks_starttx.write(|w| unsafe { w.bits(1) });
+        Ok(())
+    }
+
     fn send_byte(&self, byte: &u8) -> Result<(), Error> {
         let twi = &self.i2c;
 
@@ -47,9 +55,6 @@ impl I2c<TWI1> {
 
         /* Copy data into the send buffer */
         twi.txd.write(|w| unsafe { w.bits(u32::from(*byte)) });
-
-        /* Start data transmission */
-        twi.tasks_starttx.write(|w| unsafe { w.bits(1) });
 
         /* Wait until transmission was confirmed */
         while twi.events_txdsent.read().bits() == 0 {
@@ -128,6 +133,8 @@ impl WriteRead for I2c<TWI1> {
         /* Request data */
         twi.address.write(|w| unsafe { w.address().bits(addr) });
 
+        self.send_start()?;
+
         /* Send out all bytes in the outgoing buffer */
         for out in bytes {
             self.send_byte(out)?;
@@ -169,6 +176,9 @@ impl Write for I2c<TWI1> {
 
         /* Set Slave I2C address */
         twi.address.write(|w| unsafe { w.address().bits(addr) });
+
+        /* Send start condition */
+        self.send_start()?;
 
         /* Clock out all bytes */
         for in_ in bytes {
