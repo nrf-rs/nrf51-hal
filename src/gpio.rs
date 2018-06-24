@@ -245,6 +245,18 @@ macro_rules! gpio {
                     }
                 }
 
+                impl $PXi<Input<OpenDrain>> {
+                    /// Enables / disables the internal pull up
+                    pub fn internal_pull_up(&mut self, on: bool) {
+                        let pincnf = unsafe { &(*GPIO::ptr()).pin_cnf[$i] };
+                        if on {
+                            pincnf.modify(|_, w| w.pull().pullup());
+                        } else {
+                            pincnf.modify(|_, w| w.pull().disabled());
+                        }
+                    }
+                }
+
                 impl $PXi<Output<OpenDrain>> {
                     /// Enables / disables the internal pull up
                     pub fn internal_pull_up(&mut self, on: bool) {
