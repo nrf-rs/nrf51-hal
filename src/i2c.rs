@@ -1,6 +1,7 @@
 use gpio::gpio::PIN;
 use gpio::{Input, OpenDrain};
 use nrf51::TWI1;
+use nrf51::twi0::frequency;
 
 use hal::blocking::i2c::{Write, WriteRead};
 
@@ -17,13 +18,40 @@ pub enum Error {
     NACK,
 }
 
+pub enum Frequency {
+    K100,
+    K250,
+    K400
+}
+
+impl Into<frequency::FREQUENCYW> for Frequency {
+    fn into(self) -> frequency::FREQUENCYW {
+        match self {
+            Frequency::K100 => frequency::FREQUENCYW::K100,
+            Frequency::K250 => frequency::FREQUENCYW::K250,
+            Frequency::K400 => frequency::FREQUENCYW::K400,
+        }
+    }
+}
+
 impl I2c<TWI1> {
     pub fn i2c1(i2c: TWI1, sdapin: PIN<Input<OpenDrain>>, sclpin: PIN<Input<OpenDrain>>) -> Self {
+        Self::i2c1_with_frequency(i2c, sdapin, sclpin, Frequency::K250)
+    }
+
+    pub fn i2c1_with_frequency(i2c: TWI1,
+                               sdapin: PIN<Input<OpenDrain>>,
+                               sclpin: PIN<Input<OpenDrain>>,
+                               frequency: Frequency) -> Self {
         /* Tell I2C controller which pins to use for sending and receiving */
         i2c.pselscl
             .write(|w| unsafe { w.bits(sclpin.get_id().into()) });
         i2c.pselsda
             .write(|w| unsafe { w.bits(sdapin.get_id().into()) });
+
+        /* Set master clock frequency */
+        i2c.frequency
+            .write(|w| w.frequency().variant(frequency.into()));
 
         /* Enable i2c function */
         i2c.enable.write(|w| w.enable().enabled());
