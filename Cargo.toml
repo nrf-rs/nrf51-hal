@@ -16,12 +16,10 @@ keywords = [
 license = "0BSD"
 name = "nrf51-hal"
 repository = "https://github.com/therealprof/nrf51-hal"
-version = "0.5.1"
+version = "0.5.2"
 
 [dependencies]
-bare-metal = "0.2.0"
-cortex-m = "0.5.2"
-cortex-m-rt = "0.5.1"
+cortex-m = "0.5.7"
 nb = "0.1.1"
 nrf51 = "0.5.0"
 
@@ -40,6 +38,7 @@ version = "1.0.2"
 [features]
 default = ["rt"]
 rt = ["nrf51/rt"]
+
 [profile.dev]
 debug = true
 lto = true

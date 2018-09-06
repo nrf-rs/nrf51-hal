@@ -3,9 +3,7 @@
 #![cfg_attr(feature = "rt", feature(used))]
 #![feature(const_fn)]
 #![allow(non_camel_case_types)]
-#![feature(duration_extras)]
 
-extern crate bare_metal;
 extern crate cast;
 extern crate cortex_m;
 pub extern crate embedded_hal as hal;
