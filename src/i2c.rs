@@ -1,7 +1,7 @@
 use gpio::gpio::PIN;
 use gpio::{Input, OpenDrain};
-use nrf51::TWI1;
 use nrf51::twi0::frequency;
+use nrf51::TWI1;
 
 use hal::blocking::i2c::{Write, WriteRead};
 
@@ -21,7 +21,7 @@ pub enum Error {
 pub enum Frequency {
     K100,
     K250,
-    K400
+    K400,
 }
 
 impl Into<frequency::FREQUENCYW> for Frequency {
@@ -39,10 +39,12 @@ impl I2c<TWI1> {
         Self::i2c1_with_frequency(i2c, sdapin, sclpin, Frequency::K250)
     }
 
-    pub fn i2c1_with_frequency(i2c: TWI1,
-                               sdapin: PIN<Input<OpenDrain>>,
-                               sclpin: PIN<Input<OpenDrain>>,
-                               frequency: Frequency) -> Self {
+    pub fn i2c1_with_frequency(
+        i2c: TWI1,
+        sdapin: PIN<Input<OpenDrain>>,
+        sclpin: PIN<Input<OpenDrain>>,
+        frequency: Frequency,
+    ) -> Self {
         /* Tell I2C controller which pins to use for sending and receiving */
         i2c.pselscl
             .write(|w| unsafe { w.bits(sclpin.get_id().into()) });
