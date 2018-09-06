@@ -29,7 +29,7 @@ impl CountDown for Timer {
         T: Into<Self::Time>,
     {
         let duration = count.into();
-        assert!(duration.as_secs() < ((u32::MAX - duration.subsec_micros()) / 1_000_000) as u64);
+        assert!(duration.as_secs() < u64::from((u32::MAX - duration.subsec_micros()) / 1_000_000));
 
         let us = (duration.as_secs() as u32) * 1_000_000 + duration.subsec_micros();
         self.0.cc[0].write(|w| unsafe { w.bits(us) });

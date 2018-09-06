@@ -75,14 +75,14 @@ impl I2c<TWI1> {
         Ok(())
     }
 
-    fn send_byte(&self, byte: &u8) -> Result<(), Error> {
+    fn send_byte(&self, byte: u8) -> Result<(), Error> {
         let twi = &self.i2c;
 
         /* Clear sent event */
         twi.events_txdsent.write(|w| unsafe { w.bits(0) });
 
         /* Copy data into the send buffer */
-        twi.txd.write(|w| unsafe { w.bits(u32::from(*byte)) });
+        twi.txd.write(|w| unsafe { w.bits(u32::from(byte)) });
 
         /* Wait until transmission was confirmed */
         while twi.events_txdsent.read().bits() == 0 {
@@ -165,7 +165,7 @@ impl WriteRead for I2c<TWI1> {
 
         /* Send out all bytes in the outgoing buffer */
         for out in bytes {
-            self.send_byte(out)?;
+            self.send_byte(*out)?;
         }
 
         /* Turn around to read data */
@@ -210,7 +210,7 @@ impl Write for I2c<TWI1> {
 
         /* Clock out all bytes */
         for in_ in bytes {
-            self.send_byte(in_)?;
+            self.send_byte(*in_)?;
         }
 
         /* Send stop */
