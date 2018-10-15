@@ -1,7 +1,8 @@
 #![no_std]
 #![cfg_attr(feature = "rt", feature(global_asm))]
-#![cfg_attr(feature = "rt", feature(used))]
 #![feature(const_fn)]
+#![feature(try_from)]
+#![feature(duration_as_u128)]
 #![allow(non_camel_case_types)]
 
 extern crate cast;

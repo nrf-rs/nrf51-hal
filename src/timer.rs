@@ -1,5 +1,6 @@
 use core::time::Duration;
-use core::u32;
+use core::convert::TryFrom;
+use core::{u16, u32};
 
 use void::Void;
 
@@ -12,17 +13,41 @@ pub struct Timer<TIM> {
 }
 
 macro_rules! timer {
-    ($($TIM:ty),+) => {
+    ([
+        $($TIM:ty: ($bit_mode:expr, $bit_width:expr),)+
+    ]) => {
         $(
             impl Timer<$TIM> {
                 pub fn new(timer: $TIM) -> Self {
-                    // 32bits @ 1MHz == max delay of ~1 hour 11 minutes
-                    timer.bitmode.write(|w| w.bitmode()._32bit());
-                    timer.prescaler.write(|w| unsafe { w.prescaler().bits(4) });
-                    timer.intenset.write(|w| w.compare0().set());
-                    timer.shorts.write(|w| w.compare0_clear().enabled());
 
+                    // Stop timer
+                    timer.tasks_stop.write(|w| unsafe { w.bits(1) });
+
+                    // 32bits @ 1MHz == max delay of ~1 hour 11 minutes
+                    timer.bitmode.write(|w| unsafe { w.bits($bit_mode) });
+
+                    // Set prescaler to 4 so 16MHz / 2^4 == 1MHz timer
+                    // TODO: Remove hardcoded scaling
+                    timer.prescaler.write(|w| unsafe { w.prescaler().bits(4) });
+
+                    // Enable interrupt
+                    timer.intenset.write(|w| w.compare0().set());
+
+                    // Enable shortcut to clear on compare interrupt
+                    // timer.shorts.write(|w| w.compare0_clear().enabled());
+
+                    // Enable shortcut to clear on compare interrupt
+                    // timer.shorts.write(|w| w.compare0_clear().enabled());
+                    // Enable shortcut to stop on compare interrupt
+                    timer.shorts.write(|w| w.compare0_stop().enabled());
+
+                    // 32bits @ 1MHz == ~72 minutes
+                    // 16bits @ 1MHz == ~67 milliseconds
                     Timer { timer: timer }
+                }
+
+                pub fn free(self) -> $TIM {
+                    self.timer
                 }
             }
 
@@ -34,13 +59,23 @@ macro_rules! timer {
                     T: Into<Self::Time>,
                 {
                     let duration = count.into();
-                    assert!(duration.as_secs() < ((u32::MAX - duration.subsec_micros()) / 1_000_000) as u64);
 
-                    let us = (duration.as_secs() as u32) * 1_000_000 + duration.subsec_micros();
+                    // Check for overflow and convert to us: u32
+                    let us = u32::try_from(duration.as_micros()).unwrap();
+
+                    // Assert us is less than allowed bit width
+                    assert!(us <= u32::from($bit_width));
+
+                    // Write countdown time
                     self.timer.cc[0].write(|w| unsafe { w.bits(us) });
 
+                    // Reset comparison interrupt
                     self.timer.events_compare[0].reset();
+
+                    // Clear timer
                     self.timer.tasks_clear.write(|w| unsafe { w.bits(1) });
+
+                    // Start timer
                     self.timer.tasks_start.write(|w| unsafe { w.bits(1) });
                 }
 
@@ -54,13 +89,14 @@ macro_rules! timer {
                 }
             }
 
+            // Mark this timer as periodic
             impl Periodic for Timer<$TIM> {}
         )+
     };
 }
 
-timer!{
-    TIMER0,
-    TIMER1,
-    TIMER2
-}
+timer!([
+    TIMER0: (0, u32::MAX),
+    TIMER1: (3, u16::MAX),
+    TIMER2: (3, u16::MAX),
+]);
