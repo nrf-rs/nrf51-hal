@@ -1,11 +1,11 @@
 //! Delays
 
 use cast::u32;
-use nrf51::{TIMER0, TIMER1, TIMER2};
+use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
 
 use hal::blocking::delay::{DelayMs, DelayUs};
 
-pub use timer::{Timer, BitMode};
+pub use timer::{Timer, TimerCounter};
 pub use timer::{micros, hertz};
 
 macro_rules! delay {
@@ -32,7 +32,13 @@ macro_rules! delay {
             impl DelayUs<u32> for Timer<$TIM> {
                 fn delay_us(&mut self, us: u32) {
                     
-                    self.delay(micros(us));
+                    let compare: u32 = micros(us) * self.frequency();
+
+                    let r = self.delay(0, compare);
+
+                    if let Err(e) = r {
+                        panic!("{}", e);
+                    }
                 }
             }
 
@@ -52,4 +58,4 @@ macro_rules! delay {
     };
 }
 
-delay!(TIMER0, TIMER1, TIMER2);
+delay!(TIMER0, TIMER1, TIMER2, RTC0, RTC1);
