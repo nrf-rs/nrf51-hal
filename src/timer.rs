@@ -92,8 +92,8 @@ pub struct Timer<TIM> {
     pub timer: TIM,
 }
 
-const HCLK_FREQ: u32 = 16_000_000;
-// const LCLK_FREQ: u32 = 32768;
+const HFCLK_FREQ: u32 = 16_000_000;
+const LFCLK_FREQ: u32 = 32_768;
 
 // fn bitmode_width(bitmode: BitMode) -> u8 {
 //     match bitmode {
@@ -280,7 +280,7 @@ macro_rules! timers_and_counters {
                     // Set compare event and start counter
                     let r = self.set_compare_start(0, compare);
 
-                    if let Err(_) = r {
+                    if r.is_err() {
                         panic!("Timer value error");
                     }
                 }
@@ -314,14 +314,16 @@ macro_rules! timers {
         $(
 
             impl Timer<$TIM> {
-                /// Construct with prescaler
+                /// Construct TIMER based timer with prescaler
                 pub fn new(timer: $TIM, prescaler: u8) -> Self {
 
                     // Stop timer
                     timer.tasks_stop.write(|w| unsafe { w.bits(1) });
 
+                    // Set bitmode
                     timer.bitmode.write(|w| unsafe { w.bits($bitmode as u32) });
                     
+                    // Set prescaler
                     timer.prescaler.write(|w| unsafe { w.prescaler().bits(prescaler) });
 
                     // max_duration = bit_width / 16MHz * 2^prescaler
@@ -376,7 +378,7 @@ macro_rules! timers {
                 /// f = 16MHz / (2^prescaler)
                 fn frequency(&mut self) -> hertz {
                     let prescaler = self.timer.prescaler.read().prescaler().bits();
-                    let frequency = HCLK_FREQ.checked_div(2u32.pow(u32::from(prescaler))).unwrap();
+                    let frequency = HFCLK_FREQ.checked_div(2u32.pow(u32::from(prescaler))).unwrap();
                     frequency.hz()
                 }
 
@@ -474,29 +476,34 @@ timers!([
 
 macro_rules! rtcs {
     ([
-        $($TIM:ty: $count:expr,)+
+        $($RTC:ty: $count:expr,)+
     ]) => {
         $(
 
-            impl Timer<$TIM> {
-                /// Construct with prescaler
-                pub fn new(timer: $TIM, prescaler: u16) -> Self {
+            impl Timer<$RTC> {
+                /// Construct RTC based timer with prescaler
+                /// *WARNING* The LFCLK needs to be activated first, e.g.
+                /// ```
+                /// p.CLOCK.tasks_lfclkstart.write(|w| unsafe { w.bits(1) });
+                /// ```
+                pub fn new(timer: $RTC, prescaler: u16) -> Self {
+
+                    // Start LFCLK, should be done before
+                    // clock.tasks_lfclkstart.write(|w| unsafe { w.bits(1) });
 
                     // Stop timer
                     timer.tasks_stop.write(|w| unsafe { w.bits(1) });
                     
+                    // Set prescaler
                     timer.prescaler.write(|w| unsafe { w.prescaler().bits(prescaler) });
 
-                    // max_duration = bit_width / 16MHz * 2^prescaler
-                    // Set prescaler to 4 so 16MHz / 2^4 = 1MHz timer
-                    // 32bits @ 1MHz = ~72 minutes
-                    // 24bits @ 1MHz = ~16 seconds
-                    // 16bits @ 1MHz = ~67 milliseconds
+                    // max_duration = 24bits / 32.768kHz * (prescaler+1)
+                    // 24bits @ 32.768kHz = 512 seconds
                     Timer { timer: timer }
                 }
             }
 
-            impl TimerCounter for Timer<$TIM> {
+            impl TimerCounter for Timer<$RTC> {
 
                 type Prescaler = u16;
                 type Compare = u32;
@@ -536,12 +543,25 @@ macro_rules! rtcs {
                 /// f = 32.768kHz / (prescaler + 1)
                 fn frequency(&mut self) -> hertz {
                     let prescaler = self.timer.prescaler.read().prescaler().bits();
-                    let frequency = HCLK_FREQ.checked_div(2u32.pow(u32::from(prescaler))).unwrap();
+                    let frequency = LFCLK_FREQ.checked_div(u32::from(prescaler) + 1).unwrap();
                     frequency.hz()
                 }
 
                 /// Set comparison value, unchecked
                 fn set_compare(&mut self, idx: usize, counter: u32) {
+
+                    // Enable comparison event
+                    // Yes, this will often be redundant
+                    // No, I could not think of a better simple way of doing this
+                    // This code is free as in destined for landfill
+                    match idx {
+                        0 => self.timer.evten.write(|w| w.compare0().enabled()),
+                        1 => self.timer.evten.write(|w| w.compare1().enabled()),
+                        2 => self.timer.evten.write(|w| w.compare2().enabled()),
+                        3 => self.timer.evten.write(|w| w.compare3().enabled()),
+                        _ => panic!("Invalid set_compare idx: {}", idx),
+                    }
+
                     // Write countup time
                     self.timer.cc[idx].write(|w| unsafe { w.bits(counter) });
                 }
