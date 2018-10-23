@@ -8,7 +8,7 @@ use core::ops::Mul;
 use core::result::Result;
 use void::Void;
 
-pub use hal::timer::CountDown;
+pub use hal::timer::{CountDown, Periodic};
 
 use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
 
@@ -71,6 +71,7 @@ pub enum BitMode {
     _32bit = 3,
 }
 
+/// Error to represent values which are outside upper bounds
 #[derive(Debug)]
 pub struct InvalidValueError<T> {
     value_name: &'static str,
@@ -88,29 +89,22 @@ impl<T> fmt::Display for InvalidValueError<T> where
     }
 }
 
+/// Error to respresent a stopped countdown
+#[derive(Debug)]
+pub struct CountdownStoppedError;
+
+impl fmt::Display for CountdownStoppedError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "countdown could not be cancelled as it has already been canceled or was never started")
+    }
+}
+
 pub struct Timer<TIM> {
     pub timer: TIM,
 }
 
 const HFCLK_FREQ: u32 = 16_000_000;
 const LFCLK_FREQ: u32 = 32_768;
-
-// fn bitmode_width(bitmode: BitMode) -> u8 {
-//     match bitmode {
-//         BitMode::_08bit => 8,
-//         BitMode::_16bit => 16,
-//         BitMode::_24bit => 24,
-//         BitMode::_32bit => 32,
-//     }
-// }
-
-// fn prescaler_from_duration(bitmode: BitMode, duration: Duration) -> u8 {
-//     // max_duration = 2^bit_width / clk_freq * 2^prescaler
-//     let prescaler = duration.as_micros() / 1_000_000 * u128::from(HCLK_FREQ) / 2u128.pow(bitmode_width(bitmode));
-//     let prescaler = f32::from(u16::try_from(prescaler).unwrap()).log2();
-//     assert!(prescaler <= 9);
-//     u8::try_from(prescaler.ceil()).unwrap()
-// }
 
 pub trait TimerCounter {
     /// Type for prescaler
@@ -255,6 +249,25 @@ macro_rules! checked_set_prescaler {
     };
 }
 
+macro_rules! Countdown_wait {
+    ($idx:expr) => {
+        fn wait(&mut self) -> nb::Result<(), Void> {
+
+            // Check for comparison event
+            if self.compare_event($idx) {
+
+                // Reset comparison event
+                self.reset_compare_event($idx);
+                Ok(())
+
+            } else {
+
+                Err(nb::Error::WouldBlock)
+            }
+        }
+    };
+}
+
 macro_rules! timers_and_counters {
     ( $($TIMCO:ty),+ ) => {
         $(
@@ -266,40 +279,7 @@ macro_rules! timers_and_counters {
                 }
             }
 
-            impl CountDown for Timer<$TIMCO> {
-                type Time = micros;
-
-                fn start<T>(&mut self, count: T)
-                where
-                    T: Into<Self::Time>,
-                {
-
-                    // Get comparison value
-                    let compare: u32 = count.into() * self.frequency();
-
-                    // Set compare event and start counter
-                    let r = self.set_compare_start(0, compare);
-
-                    if r.is_err() {
-                        panic!("Timer value error");
-                    }
-                }
-
-                fn wait(&mut self) -> nb::Result<(), Void> {
-
-                    // Check for comparison event
-                    if self.compare_event(0) {
-
-                        // Reset comparison event
-                        self.reset_compare_event(0);
-                        Ok(())
-
-                    } else {
-
-                        Err(nb::Error::WouldBlock)
-                    }
-                }
-            }
+            
 
         )+
     };
@@ -464,6 +444,36 @@ macro_rules! timers {
                 }
             }
 
+            impl CountDown for Timer<$TIM> {
+                type Time = micros;
+
+                fn start<T>(&mut self, count: T)
+                where
+                    T: Into<Self::Time>,
+                {
+
+                    // Get comparison value
+                    let compare: u32 = count.into() * self.frequency();
+
+                    // Set periodic
+                    self.set_compare_int_clear(0);
+
+                    // Set compare event and start counter
+                    let r = self.set_compare_start(0, compare);
+
+                    if r.is_err() {
+                        panic!("Timer value error");
+                    }
+                }
+
+                Countdown_wait!(0);
+            }
+
+            impl Periodic for Timer<$TIM> {}
+
+            // Cancel has not been implemented as an nrf51::TIMER's status cannot be read directly.
+            // This is needed as Cancel must throw an error if the timer is stopped.
+
         )+
     };
 }
@@ -589,6 +599,31 @@ macro_rules! rtcs {
                     Ok(())
                 }
             }
+
+            impl CountDown for Timer<$RTC> {
+                type Time = micros;
+
+                fn start<T>(&mut self, count: T)
+                where
+                    T: Into<Self::Time>,
+                {
+
+                    // Get comparison value
+                    let compare: u32 = count.into() * self.frequency();
+
+                    // Set compare event and start counter
+                    let r = self.set_compare_start(0, compare);
+
+                    if r.is_err() {
+                        panic!("Timer value error");
+                    }
+                }
+
+                Countdown_wait!(0);
+            }
+
+            // Cancel has not been implemented as an nrf51::RTC's status cannot be read directly.
+            // This is needed as Cancel must throw an error if the timer is stopped.
 
         )+
     };
