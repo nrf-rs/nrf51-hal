@@ -1,66 +1,121 @@
 //! Timers and counters
 
-use core::time::Duration;
-use core::convert::TryFrom;
 use core::u32;
 use core::fmt;
-use core::ops::Mul;
 use core::result::Result;
+
+use cast::{u32, Error};
 use void::Void;
 
 pub use hal::timer::{CountDown, Periodic};
 
 use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
 
-/// Microseconds
+
+const HFCLK_FREQ: u32 = 16_000_000;
+const LFCLK_FREQ: u32 = 32_768;
+
+/// High frequency tick
+/// one sixteenth of a microsecond, the time for one nrf51 clock cycle
+/// Max: 2^32 / (16MHz / 2^9) = 2^37 seconds = ~38 hours = 2^41 hfticks
 #[derive(Debug, Clone, Copy)]
-pub struct micros(pub u32);
+pub struct Hfticks(pub u64);
+
+/// Low frequency tick
+/// 32.768 kHz clock cycle
+/// Max: 2^16 / (32.768kHz / 2^12) = 8192seconds = ~137 minutes = 2^28 lfticks
+#[derive(Debug, Clone, Copy)]
+pub struct Lfticks(pub u32);
+
+/// Microsecond
+/// 
+#[derive(Debug, Clone, Copy)]
+pub struct Micros(pub u64);
+
+/// Milliseconds
+#[derive(Debug, Clone, Copy)]
+pub struct Millis(pub u32);
 
 /// Hertz
+/// Maximum is ~2^24
 #[derive(Debug, Clone, Copy)]
-pub struct hertz(pub u32);
+pub struct Hertz(pub u32);
 
-fn mul_micro_u32(lhs: u32, rhs: u32) -> u32 {
-    u32::try_from(u64::from(lhs) * u64::from(rhs) / 1_000_000).unwrap()
-}
 
-impl Mul<hertz> for micros {
-    type Output = u32;
-
-    fn mul(self, rhs: hertz) -> u32 {
-        mul_micro_u32(self.0, rhs.0)
+impl Hfticks {
+    /// Checked multiplication
+    pub fn checked_mul(self, rhs: Hertz) -> Result<u32, cast::Error> {
+        // Size check
+        // lhs        * rhs        / 16_000_000 <= u32::max()
+        // (64-lhs0s) + (32-rhs0s) - 10         <= 32
+        if (64 - self.0.leading_zeros()) + (32 - rhs.0.leading_zeros()) - 10 > 32 {
+            Err(Error::Overflow)
+        } else {
+            let p = self.0.checked_mul(u64::from(rhs.0)).ok_or(Error::Overflow)?;
+            u32(p / u64::from(HFCLK_FREQ))
+        }
     }
 }
 
-impl Mul<micros> for hertz {
-    type Output = u32;
+impl Micros {
+    /// Checked multiplication
+    pub fn checked_mul(self, rhs: Hertz) -> Result<u32, cast::Error> {
+        let p = self.0.checked_mul(u64::from(rhs.0)).ok_or(Error::Overflow)?;
+        u32(p / 1_000_000)
+    }
+}
 
-    fn mul(self, rhs: micros) -> u32 {
-        mul_micro_u32(self.0, rhs.0)
+impl From<Micros> for Hfticks {
+    fn from(micros: Micros) -> Self {
+        Hfticks(micros.0 * 16)
+    }
+}
+
+impl From<Millis> for Hfticks {
+    fn from(millis: Millis) -> Self {
+        Hfticks(u64::from(millis.0) * 16_000)
+    }
+}
+
+impl Lfticks {
+    fn checked_mul(self, rhs: Hertz) -> Option<u32> {
+        let p = self.0.checked_mul(rhs.0)?;
+        Some(u32(p / LFCLK_FREQ))
+    }
+}
+
+impl From<Millis> for Lfticks {
+    fn from(millis: Millis) -> Self {
+        Lfticks(u32(f64::from(millis.0) * 32.768).unwrap())
     }
 }
 
 /// Extension trait that adds convenience methods to the `u32` type
 pub trait U32Ext {
-    /// Wrap in `us`
-    fn us(self) -> micros;
+    /// Wrap in `ms`
+    fn ms(self) -> Millis;
     /// Wrap in `hz`
-    fn hz(self) -> hertz;
+    fn hz(self) -> Hertz;
 }
 
 impl U32Ext for u32 {
-    fn us(self) -> micros {
-        micros(self)
+    fn ms(self) -> Millis {
+        Millis(self)
     }
-    fn hz(self) -> hertz {
-        hertz(self)
+    fn hz(self) -> Hertz {
+        Hertz(self)
     }
 }
 
-/// Extension trait that adds `Into<micros>` to the `Duration` type
-impl Into<micros> for Duration {
-    fn into(self) -> micros {
-        micros(u32::try_from(self.as_micros()).unwrap())
+/// Extension trait that adds convenience methods to the `u64` type
+pub trait U64Ext {
+    /// Wrap in `us`
+    fn us(self) -> Micros;
+}
+
+impl U64Ext for u64 {
+    fn us(self) -> Micros {
+        Micros(self)
     }
 }
 
@@ -73,13 +128,13 @@ pub enum BitMode {
 
 /// Error to represent values which are outside upper bounds
 #[derive(Debug)]
-pub struct InvalidValueError<T> {
+pub struct OverValueError<T> {
     value_name: &'static str,
     value: T,
     upper_bound: T,
 }
 
-impl<T> fmt::Display for InvalidValueError<T> where
+impl<T> fmt::Display for OverValueError<T> where
     T: fmt::Display {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -89,22 +144,9 @@ impl<T> fmt::Display for InvalidValueError<T> where
     }
 }
 
-/// Error to respresent a stopped countdown
-#[derive(Debug)]
-pub struct CountdownStoppedError;
-
-impl fmt::Display for CountdownStoppedError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "countdown could not be cancelled as it has already been canceled or was never started")
-    }
-}
-
 pub struct Timer<TIM> {
     pub timer: TIM,
 }
-
-const HFCLK_FREQ: u32 = 16_000_000;
-const LFCLK_FREQ: u32 = 32_768;
 
 pub trait TimerCounter {
     /// Type for prescaler
@@ -119,15 +161,15 @@ pub trait TimerCounter {
     /// Clear task 
     fn task_clear(&mut self);
     /// Frequency of counter, should read prescaler register 
-    fn frequency(&mut self) -> hertz;
+    fn frequency(&mut self) -> Hertz;
     /// Set prescaler
     fn set_prescaler(&mut self, prescaler: Self::Prescaler);
     /// Set prescaler, checked
-    fn checked_set_prescaler(&mut self, prescaler: Self::Prescaler) -> Result<(), InvalidValueError<Self::Prescaler>>;
+    fn checked_set_prescaler(&mut self, prescaler: Self::Prescaler) -> Result<(), OverValueError<Self::Prescaler>>;
     /// Set compare
     fn set_compare(&mut self, idx: usize, compare: Self::Compare);
     /// Set compare, checked
-    fn checked_set_compare(&mut self, idx: usize, compare: Self::Compare) -> Result<(), InvalidValueError<Self::Compare>>;
+    fn checked_set_compare(&mut self, idx: usize, compare: Self::Compare) -> Result<(), OverValueError<Self::Compare>>;
     /// Check compare event
     fn compare_event(&mut self, idx: usize) -> bool;
     /// Reset compare event
@@ -144,7 +186,7 @@ pub trait TimerCounter {
     }
 
     /// Set compare and start timer
-    fn set_compare_start(&mut self, idx: usize, compare: Self::Compare) -> Result<(), InvalidValueError<Self::Compare>> {
+    fn set_compare_start(&mut self, idx: usize, compare: Self::Compare) -> Result<(), OverValueError<Self::Compare>> {
         
         // Reset compare event
         self.reset_compare_event(idx);
@@ -159,7 +201,7 @@ pub trait TimerCounter {
     }
 
     /// Simple delay
-    fn delay(&mut self, idx: usize, compare: Self::Compare) -> Result<(), InvalidValueError<Self::Compare>> {
+    fn delay(&mut self, idx: usize, compare: Self::Compare) -> Result<(), OverValueError<Self::Compare>> {
 
         // Set compare event and start counter
         self.set_compare_start(idx, compare)?;
@@ -230,12 +272,12 @@ macro_rules! set_prescaler {
 
 macro_rules! checked_set_prescaler {
     ($prescaler_type:ty, $max_prescaler:expr) => {
-        fn checked_set_prescaler(&mut self, prescaler: $prescaler_type) -> Result<(), InvalidValueError<$prescaler_type>> {
+        fn checked_set_prescaler(&mut self, prescaler: $prescaler_type) -> Result<(), OverValueError<$prescaler_type>> {
             
             const MAX_PRESCALER: $prescaler_type = $max_prescaler;
 
             if prescaler >= MAX_PRESCALER {
-                return Err(InvalidValueError{
+                return Err(OverValueError{
                     value_name: "prescaler",
                     value: prescaler,
                     upper_bound: MAX_PRESCALER
@@ -356,7 +398,7 @@ macro_rules! timers {
 
                 /// Get frequency
                 /// f = 16MHz / (2^prescaler)
-                fn frequency(&mut self) -> hertz {
+                fn frequency(&mut self) -> Hertz {
                     let prescaler = self.timer.prescaler.read().prescaler().bits();
                     let frequency = HFCLK_FREQ.checked_div(2u32.pow(u32::from(prescaler))).unwrap();
                     frequency.hz()
@@ -369,7 +411,7 @@ macro_rules! timers {
                 }
 
                 /// Set comparison value, unchecked
-                fn checked_set_compare(&mut self, idx: usize, counter: Self::Compare) -> Result<(), InvalidValueError<Self::Compare>> {
+                fn checked_set_compare(&mut self, idx: usize, counter: Self::Compare) -> Result<(), OverValueError<Self::Compare>> {
 
                     let bitmode = self.timer.bitmode.read().bitmode();
 
@@ -385,7 +427,7 @@ macro_rules! timers {
                     // assert!(counter <= max_size, "counter({}) < {}", counter, max_size);
                     if counter > max_size {
 
-                        return Err(InvalidValueError{
+                        return Err(OverValueError{
                             value_name: "compare",
                             value: counter,
                             upper_bound: max_size,
@@ -445,7 +487,7 @@ macro_rules! timers {
             }
 
             impl CountDown for Timer<$TIM> {
-                type Time = micros;
+                type Time = Hfticks;
 
                 fn start<T>(&mut self, count: T)
                 where
@@ -453,17 +495,17 @@ macro_rules! timers {
                 {
 
                     // Get comparison value
-                    let compare: u32 = count.into() * self.frequency();
+                    let compare: u32 = count
+                        .into()
+                        .checked_mul(self.frequency())
+                        .expect("Timer count value error");
 
                     // Set periodic
                     self.set_compare_int_clear(0);
 
                     // Set compare event and start counter
-                    let r = self.set_compare_start(0, compare);
-
-                    if r.is_err() {
-                        panic!("Timer value error");
-                    }
+                    self.set_compare_start(0, compare)
+                        .expect("Timer comparison value error");
                 }
 
                 Countdown_wait!(0);
@@ -551,7 +593,7 @@ macro_rules! rtcs {
 
                 /// Get frequency
                 /// f = 32.768kHz / (prescaler + 1)
-                fn frequency(&mut self) -> hertz {
+                fn frequency(&mut self) -> Hertz {
                     let prescaler = self.timer.prescaler.read().prescaler().bits();
                     let frequency = LFCLK_FREQ.checked_div(u32::from(prescaler) + 1).unwrap();
                     frequency.hz()
@@ -563,7 +605,7 @@ macro_rules! rtcs {
                     // Enable comparison event
                     // Yes, this will often be redundant
                     // No, I could not think of a better simple way of doing this
-                    // This code is free as in destined for landfill
+                    // This code is free, free as in destined for landfill
                     match idx {
                         0 => self.timer.evten.write(|w| w.compare0().enabled()),
                         1 => self.timer.evten.write(|w| w.compare1().enabled()),
@@ -577,7 +619,7 @@ macro_rules! rtcs {
                 }
 
                 /// Set comparison value, unchecked
-                fn checked_set_compare(&mut self, idx: usize, counter: u32) -> Result<(), InvalidValueError<u32>> {
+                fn checked_set_compare(&mut self, idx: usize, counter: u32) -> Result<(), OverValueError<u32>> {
 
                     // 2^24
                     const MAX_COUNTER: u32 = 16_777_216;
@@ -586,7 +628,7 @@ macro_rules! rtcs {
                     // assert!(counter <= max_size, "counter({}) < {}", counter, max_size);
                     if counter > MAX_COUNTER {
 
-                        return Err(InvalidValueError{
+                        return Err(OverValueError{
                             value_name: "compare",
                             value: counter,
                             upper_bound: MAX_COUNTER,
@@ -601,7 +643,7 @@ macro_rules! rtcs {
             }
 
             impl CountDown for Timer<$RTC> {
-                type Time = micros;
+                type Time = Lfticks;
 
                 fn start<T>(&mut self, count: T)
                 where
@@ -609,14 +651,14 @@ macro_rules! rtcs {
                 {
 
                     // Get comparison value
-                    let compare: u32 = count.into() * self.frequency();
+                    let compare: u32 = count
+                        .into()
+                        .checked_mul(self.frequency())
+                        .expect("Timer count value error");
 
                     // Set compare event and start counter
-                    let r = self.set_compare_start(0, compare);
-
-                    if r.is_err() {
-                        panic!("Timer value error");
-                    }
+                    self.set_compare_start(0, compare)
+                        .expect("Timer comparison value error");
                 }
 
                 Countdown_wait!(0);
