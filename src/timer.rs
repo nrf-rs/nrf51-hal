@@ -86,7 +86,7 @@ impl Lfticks {
 
 impl From<Millis> for Lfticks {
     fn from(millis: Millis) -> Self {
-        Lfticks(u32(f64::from(millis.0) * 32.768).unwrap())
+        Lfticks(millis.0 * LFCLK_FREQ / 1000)
     }
 }
 
