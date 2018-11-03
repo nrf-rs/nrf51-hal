@@ -16,4 +16,6 @@ pub mod i2c;
 pub mod prelude;
 pub mod rng;
 pub mod serial;
+pub mod time;
 pub mod timer;
+pub mod timer_counter;
