@@ -1,5 +1,4 @@
 #![no_std]
-#![cfg_attr(feature = "rt", feature(global_asm))]
 #![allow(non_camel_case_types)]
 
 extern crate cast;
