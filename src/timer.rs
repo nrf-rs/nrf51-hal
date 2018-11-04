@@ -1,13 +1,11 @@
 //! Timer
 
-pub use hal::timer::{CountDown, Periodic};
-pub use timer_counter::{TimCo, TimerCounter, BitMode};
+pub use hal::timer;
+pub use timer_counter::{Timer, TimerCounter, BitMode, Countdown};
 pub use time::{Hfticks, Lfticks, Micros, Millis, Hertz};
 
 use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
 use void::Void;
-
-pub struct Timer<TIM>(TimCo<TIM>);
 
 
 macro_rules! Countdown_wait {
@@ -15,10 +13,10 @@ macro_rules! Countdown_wait {
         fn wait(&mut self) -> nb::Result<(), Void> {
 
             // Check for comparison event
-            if self.0.compare_event($idx) {
+            if self.compare_event($idx) {
 
                 // Reset comparison event
-                self.0.reset_compare_event($idx);
+                self.reset_compare_event($idx);
                 Ok(())
 
             } else {
@@ -35,22 +33,7 @@ macro_rules! timers {
     ]) => {
         $(
 
-            impl Timer<$TIM> {
-                /// Construct TIMER based timer with prescaler
-                pub fn new(timer: $TIM, prescaler: u8) -> Self {
-
-                    Timer(TimCo::<$TIM>::new(timer, prescaler))
-                }
-
-                /// Set comparison bit width
-                /// Set counter bit width = 32bit 24bit 16bit 8bit
-                ///             bitmode   = 3     2     0     1
-                pub fn set_bitmode(&mut self, bitmode: BitMode) {
-                    self.0.set_bitmode(bitmode);
-                }
-            }
-
-            impl CountDown for Timer<$TIM> {
+            impl timer::CountDown for Timer<Countdown, $TIM> {
                 type Time = Hfticks;
 
                 fn start<T>(&mut self, count: T)
@@ -61,21 +44,21 @@ macro_rules! timers {
                     // Get comparison value
                     let compare: u32 = count
                         .into()
-                        .checked_mul(self.0.frequency())
+                        .checked_mul(self.frequency())
                         .expect("Timer count value error");
 
                     // Set periodic
-                    self.0.set_compare_int_clear(0);
+                    self.set_compare_int_clear(0);
 
                     // Set compare event and start counter
-                    self.0.set_compare_start(0, compare)
+                    self.set_compare_start(0, compare)
                         .expect("Timer comparison value error");
                 }
 
                 Countdown_wait!(0);
             }
 
-            impl Periodic for Timer<$TIM> {}
+            impl timer::Periodic for Timer<Countdown, $TIM> {}
 
             // Cancel has not been implemented as an nrf51::TIMER's status cannot be read directly.
             // This is needed as Cancel must throw an error if the timer is stopped.
@@ -96,19 +79,7 @@ macro_rules! rtcs {
     ]) => {
         $(
 
-            impl Timer<$RTC> {
-                /// Construct RTC based timer with prescaler
-                /// *WARNING* The LFCLK needs to be activated first, e.g.
-                /// ```
-                /// p.CLOCK.tasks_lfclkstart.write(|w| unsafe { w.bits(1) });
-                /// ```
-                pub fn new(timer: $RTC, prescaler: u16) -> Self {
-
-                    Timer(TimCo::<$RTC>::new(timer, prescaler))
-                }
-            }
-
-            impl CountDown for Timer<$RTC> {
+            impl timer::CountDown for Timer<Countdown, $RTC> {
                 type Time = Lfticks;
 
                 fn start<T>(&mut self, count: T)
@@ -119,11 +90,11 @@ macro_rules! rtcs {
                     // Get comparison value
                     let compare: u32 = count
                         .into()
-                        .checked_mul(self.0.frequency())
+                        .checked_mul(self.frequency())
                         .expect("Timer count value error");
 
                     // Set compare event and start counter
-                    self.0.set_compare_start(0, compare)
+                    self.set_compare_start(0, compare)
                         .expect("Timer comparison value error");
                 }
 

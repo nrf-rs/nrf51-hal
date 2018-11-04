@@ -2,6 +2,7 @@
 
 use core::u32;
 use core::fmt;
+use core::marker::PhantomData;
 use core::result::Result;
 
 pub use time::{
@@ -38,7 +39,22 @@ impl<T> fmt::Display for OverValueError<T> where
     }
 }
 
-pub struct TimCo<TIM> {
+// pub struct Timer<MODE, TIM> {
+//     _mode: PhantomData<MODE>,
+//     pub timer: TIM,
+// }
+
+/// Delay provider (type state)
+pub struct Generic;
+
+/// Countdown provider (type state)
+pub struct Countdown;
+
+/// Delay provider (type state)
+pub struct Delay;
+
+pub struct Timer<MODE, TIM> {
+    _mode: PhantomData<MODE>,
     pub timer: TIM,
 }
 
@@ -189,14 +205,31 @@ macro_rules! timers_and_counters {
     ( $($TIMCO:ty),+ ) => {
         $(
 
-            impl TimCo<$TIMCO> {
+            impl<MODE> Timer<MODE, $TIMCO> {
                 /// Free and return timer
                 pub fn free(self) -> $TIMCO {
                     self.timer
                 }
             }
 
-            
+            impl Timer<Generic, $TIMCO> {
+
+                /// Into countdown
+                pub fn into_countdown(self) -> Timer<Countdown, $TIMCO> {
+                    Timer {
+                        _mode: PhantomData,
+                        timer: self.timer,
+                    }
+                }
+
+                /// Into delay
+                pub fn into_delay(self) -> Timer<Delay, $TIMCO> {
+                    Timer {
+                        _mode: PhantomData,
+                        timer: self.timer,
+                    }
+                }
+            }
 
         )+
     };
@@ -210,9 +243,9 @@ macro_rules! timers {
     ]) => {
         $(
 
-            impl TimCo<$TIM> {
+            impl<MODE> Timer<MODE, $TIM> {
                 /// Construct TIMER based timer with prescaler
-                pub fn new(timer: $TIM, prescaler: u8) -> Self {
+                pub fn new(timer: $TIM, prescaler: u8) -> Timer<Generic, $TIM> {
 
                     // Stop timer
                     timer.tasks_stop.write(|w| unsafe { w.bits(1) });
@@ -228,7 +261,10 @@ macro_rules! timers {
                     // 32bits @ 1MHz = ~72 minutes
                     // 24bits @ 1MHz = ~16 seconds
                     // 16bits @ 1MHz = ~67 milliseconds
-                    TimCo { timer: timer }
+                    Timer {
+                        _mode: PhantomData,
+                        timer: timer,
+                    }
                 }
 
                 /// Set comparison bit width
@@ -239,7 +275,7 @@ macro_rules! timers {
                 }
             }
 
-            impl TimerCounter for TimCo<$TIM> {
+            impl<MODE> TimerCounter for Timer<MODE, $TIM> {
 
                 type Prescaler = u8;
                 type Compare = u32;
@@ -316,7 +352,7 @@ macro_rules! timers {
                 }
             }
 
-            impl TimCo<$TIM> {
+            impl<MODE> Timer<MODE, $TIM> {
 
                 /// Enable compare interrupt
                 fn enable_compare_int(&mut self, idx: usize) {
@@ -377,13 +413,13 @@ macro_rules! rtcs {
     ]) => {
         $(
 
-            impl TimCo<$RTC> {
+            impl<MODE> Timer<MODE, $RTC> {
                 /// Construct RTC based timer with prescaler
                 /// *WARNING* The LFCLK needs to be activated first, e.g.
                 /// ```
                 /// p.CLOCK.tasks_lfclkstart.write(|w| unsafe { w.bits(1) });
                 /// ```
-                pub fn new(timer: $RTC, prescaler: u16) -> Self {
+                pub fn new(timer: $RTC, prescaler: u16) -> Timer<Generic, $RTC> {
 
                     // Start LFCLK, should be done before
                     // clock.tasks_lfclkstart.write(|w| unsafe { w.bits(1) });
@@ -396,11 +432,14 @@ macro_rules! rtcs {
 
                     // max_duration = 24bits / 32.768kHz * (prescaler+1)
                     // 24bits @ 32.768kHz = 512 seconds
-                    TimCo { timer: timer }
+                    Timer {
+                        _mode: PhantomData,
+                        timer: timer,
+                    }
                 }
             }
 
-            impl TimerCounter for TimCo<$RTC> {
+            impl<MODE> TimerCounter for Timer<MODE, $RTC> {
 
                 type Prescaler = u16;
                 type Compare = u32;
