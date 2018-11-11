@@ -10,6 +10,7 @@ pub extern crate nb;
 pub extern crate nrf51;
 
 pub mod delay;
+pub mod ecb;
 pub mod gpio;
 pub mod i2c;
 pub mod prelude;
