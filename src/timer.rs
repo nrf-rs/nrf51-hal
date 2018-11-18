@@ -1,9 +1,10 @@
 //! Timer
 
-pub use hal::timer;
-pub use timer_counter::{Timer, TimerCounter, BitMode, Countdown};
+pub use timer_counter::{Timer, TimerCounter, Generic};
+pub use timer_counter::{BitMode, Countdown};
 pub use time::{Hfticks, Lfticks, Micros, Millis, Hertz};
 
+use hal::timer;
 use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
 use void::Void;
 
