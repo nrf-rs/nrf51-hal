@@ -1,7 +1,7 @@
 //! Time definitions
 
 use cast::{u32, Error};
-
+use core::time::Duration;
 
 pub const HFCLK_FREQ: u32 = 16_000_000;
 pub const LFCLK_FREQ: u32 = 32_768;
@@ -56,6 +56,15 @@ impl Micros {
     }
 }
 
+impl From<Duration> for Hfticks {
+    fn from(duration: Duration) -> Self {
+        Hfticks(
+            u64::from(duration.subsec_nanos() * 16 / 1000) +
+            u64::from(duration.as_secs() * 16_000_000)
+        )
+    }
+}
+
 impl From<Micros> for Hfticks {
     fn from(micros: Micros) -> Self {
         Hfticks(micros.0 * 16)
@@ -72,6 +81,15 @@ impl Lfticks {
     pub fn checked_mul(self, rhs: Hertz) -> Option<u32> {
         let p = self.0.checked_mul(rhs.0)?;
         Some(u32(p / LFCLK_FREQ))
+    }
+}
+
+impl From<Duration> for Lfticks {
+    fn from(duration: Duration) -> Self {
+        Lfticks(
+            duration.subsec_nanos() * 32768 / 1_000_000_000 +
+            u32(duration.as_secs() * 32768).unwrap()
+        )
     }
 }
 
