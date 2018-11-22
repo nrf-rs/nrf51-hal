@@ -1,52 +1,102 @@
-use core::time::Duration;
-use core::u32;
+//! Timer
 
+pub use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
+pub use time::{Hfticks, Lfticks, Micros, Millis, Hertz};
+pub use timer_counter::{BitMode, Countdown};
+pub use timer_counter::{Timer, TimerCounter, Generic};
+
+use hal::timer;
 use void::Void;
 
-use hal::timer::{CountDown, Periodic};
-use nb::{Error, Result};
-use nrf51::TIMER0;
 
-pub struct Timer(TIMER0);
+macro_rules! timers {
+    ([
+        $($TIM:ty: $bitmode:expr,)+
+    ]) => {
+        $(
 
-impl Timer {
-    pub fn new(timer: TIMER0) -> Timer {
-        // 32bits @ 1MHz == max delay of ~1 hour 11 minutes
-        timer.bitmode.write(|w| w.bitmode()._32bit());
-        timer.prescaler.write(|w| unsafe { w.prescaler().bits(4) });
-        timer.intenset.write(|w| w.compare0().set());
-        timer.shorts.write(|w| w.compare0_clear().enabled());
+            impl timer::CountDown for Timer<Countdown, $TIM> {
+                type Time = Hfticks;
 
-        Timer(timer)
-    }
+                fn start<T>(&mut self, count: T)
+                where
+                    T: Into<Self::Time>,
+                {
+
+                    // Get comparison value
+                    let compare: u32 = count
+                        .into() // Hfticks
+                        .checked_mul(self.frequency())
+                        .expect("TIMER compare value overflow");
+
+                    // Set periodic
+                    self.set_compare_int_clear(0);
+
+                    // Set compare event and start counter
+                    self.set_compare_start(0, compare)
+                        .expect("TIMER compare value error");
+                }
+
+                fn wait(&mut self) -> nb::Result<(), Void> {
+            
+                    self.nb_wait(0)
+                }
+            }
+
+            impl timer::Periodic for Timer<Countdown, $TIM> {}
+
+            // Cancel has not been implemented as an nrf51::TIMER's status cannot be read directly.
+            // This is needed as Cancel must throw an error if the timer is stopped.
+
+        )+
+    };
 }
 
-impl CountDown for Timer {
-    type Time = Duration;
+timers!([
+    TIMER0: BitMode::_32bit,
+    TIMER1: BitMode::_16bit,
+    TIMER2: BitMode::_16bit,
+]);
 
-    fn start<T>(&mut self, count: T)
-    where
-        T: Into<Self::Time>,
-    {
-        let duration = count.into();
-        assert!(duration.as_secs() < u64::from((u32::MAX - duration.subsec_micros()) / 1_000_000));
+macro_rules! rtcs {
+    ([
+        $($RTC:ty: $count:expr,)+
+    ]) => {
+        $(
 
-        let us = (duration.as_secs() as u32) * 1_000_000 + duration.subsec_micros();
-        self.0.cc[0].write(|w| unsafe { w.bits(us) });
+            impl timer::CountDown for Timer<Countdown, $RTC> {
+                type Time = Lfticks;
 
-        self.0.events_compare[0].reset();
-        self.0.tasks_clear.write(|w| unsafe { w.bits(1) });
-        self.0.tasks_start.write(|w| unsafe { w.bits(1) });
-    }
+                fn start<T>(&mut self, count: T)
+                where
+                    T: Into<Self::Time>,
+                {
 
-    fn wait(&mut self) -> Result<(), Void> {
-        if self.0.events_compare[0].read().bits() == 1 {
-            self.0.events_compare[0].reset();
-            Ok(())
-        } else {
-            Err(Error::WouldBlock)
-        }
-    }
+                    // Get comparison value
+                    let compare: u32 = count
+                        .into()
+                        .checked_mul(self.frequency())
+                        .expect("RTC compare value overflow");
+
+                    // Set compare event and start counter
+                    self.set_compare_start(0, compare)
+                        .expect("RTC compare value error");
+                }
+
+                fn wait(&mut self) -> nb::Result<(), Void> {
+            
+                    self.nb_wait(0)
+                }
+            }
+
+            // Cancel has not been implemented as an nrf51::RTC's status cannot be read directly.
+            // This is needed as Cancel must throw an error if the timer is stopped.
+
+        )+
+    };
 }
 
-impl Periodic for Timer {}
+rtcs!([
+    RTC0: 3,
+    RTC1: 4,
+]);
