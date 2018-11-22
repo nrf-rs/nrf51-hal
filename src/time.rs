@@ -38,8 +38,8 @@ impl Hfticks {
     pub fn checked_mul(self, rhs: Hertz) -> Result<u32, cast::Error> {
         // Size check
         // lhs        * rhs        / 16_000_000 <= u32::max()
-        // (64-lhs0s) + (32-rhs0s) - 10         <= 32
-        if (64 - self.0.leading_zeros()) + (32 - rhs.0.leading_zeros()) - 10 > 32 {
+        // (64-lhs0s) + (32-rhs0s) - 24         <= 32
+        if (64 - self.0.leading_zeros()) + (32 - rhs.0.leading_zeros()) - 24 >= 32 {
             Err(Error::Overflow)
         } else {
             let p = self.0.checked_mul(u64::from(rhs.0)).ok_or(Error::Overflow)?;
@@ -59,8 +59,8 @@ impl Micros {
 impl From<Duration> for Hfticks {
     fn from(duration: Duration) -> Self {
         Hfticks(
-            u64::from(duration.subsec_nanos() * 16 / 1000) +
-            u64::from(duration.as_secs() * 16_000_000)
+            u64::from(duration.subsec_nanos()) * 16 / 1000 +
+            duration.as_secs().checked_mul(16_000_000).unwrap()
         )
     }
 }
@@ -79,17 +79,18 @@ impl From<Millis> for Hfticks {
 
 impl Lfticks {
     pub fn checked_mul(self, rhs: Hertz) -> Option<u32> {
-        let p = self.0.checked_mul(rhs.0)?;
-        Some(u32(p / LFCLK_FREQ))
+        match self.0.checked_mul(rhs.0) {
+            Some(val) => Some(val / LFCLK_FREQ),
+            None => (self.0 / LFCLK_FREQ).checked_mul(rhs.0),
+        }
     }
 }
 
 impl From<Duration> for Lfticks {
     fn from(duration: Duration) -> Self {
-        Lfticks(
-            duration.subsec_nanos() * 32768 / 1_000_000_000 +
-            u32(duration.as_secs() * 32768).unwrap()
-        )
+        let subsec_part = u64::from(duration.subsec_nanos()).checked_mul(32768).unwrap()  / 1_000_000_000;
+        let sec_part = duration.as_secs().checked_mul(32768).unwrap();
+        Lfticks(u32(subsec_part + sec_part).unwrap())
     }
 }
 

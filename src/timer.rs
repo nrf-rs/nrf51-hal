@@ -1,32 +1,13 @@
 //! Timer
 
-pub use timer_counter::{Timer, TimerCounter, Generic};
-pub use timer_counter::{BitMode, Countdown};
+pub use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
 pub use time::{Hfticks, Lfticks, Micros, Millis, Hertz};
+pub use timer_counter::{BitMode, Countdown};
+pub use timer_counter::{Timer, TimerCounter, Generic};
 
 use hal::timer;
-use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
 use void::Void;
 
-
-macro_rules! Countdown_wait {
-    ($idx:expr) => {
-        fn wait(&mut self) -> nb::Result<(), Void> {
-
-            // Check for comparison event
-            if self.compare_event($idx) {
-
-                // Reset comparison event
-                self.reset_compare_event($idx);
-                Ok(())
-
-            } else {
-
-                Err(nb::Error::WouldBlock)
-            }
-        }
-    };
-}
 
 macro_rules! timers {
     ([
@@ -44,19 +25,22 @@ macro_rules! timers {
 
                     // Get comparison value
                     let compare: u32 = count
-                        .into()
+                        .into() // Hfticks
                         .checked_mul(self.frequency())
-                        .expect("Timer count value error");
+                        .expect("TIMER compare value overflow");
 
                     // Set periodic
                     self.set_compare_int_clear(0);
 
                     // Set compare event and start counter
                     self.set_compare_start(0, compare)
-                        .expect("Timer comparison value error");
+                        .expect("TIMER compare value error");
                 }
 
-                Countdown_wait!(0);
+                fn wait(&mut self) -> nb::Result<(), Void> {
+            
+                    self.nb_wait(0)
+                }
             }
 
             impl timer::Periodic for Timer<Countdown, $TIM> {}
@@ -92,14 +76,17 @@ macro_rules! rtcs {
                     let compare: u32 = count
                         .into()
                         .checked_mul(self.frequency())
-                        .expect("Timer count value error");
+                        .expect("RTC compare value overflow");
 
                     // Set compare event and start counter
                     self.set_compare_start(0, compare)
-                        .expect("Timer comparison value error");
+                        .expect("RTC compare value error");
                 }
 
-                Countdown_wait!(0);
+                fn wait(&mut self) -> nb::Result<(), Void> {
+            
+                    self.nb_wait(0)
+                }
             }
 
             // Cancel has not been implemented as an nrf51::RTC's status cannot be read directly.

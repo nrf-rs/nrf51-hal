@@ -6,12 +6,15 @@ use core::marker::PhantomData;
 use core::result::Result;
 
 pub use time::{
-    LFCLK_FREQ, HFCLK_FREQ, 
+    HFCLK_FREQ, LFCLK_FREQ,
+    Hfticks, Lfticks,
     Micros, Millis, Hertz,
     U32Ext,
 };
 
 use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
+
+use void::Void;
 
 
 pub enum BitMode {
@@ -39,11 +42,6 @@ impl<T> fmt::Display for OverValueError<T> where
     }
 }
 
-// pub struct Timer<MODE, TIM> {
-//     _mode: PhantomData<MODE>,
-//     pub timer: TIM,
-// }
-
 /// Delay provider (type state)
 pub struct Generic;
 
@@ -63,6 +61,8 @@ pub trait TimerCounter {
     type Prescaler;
     /// Type for compare, unused as same for TIMER and RTC
     type Compare;
+    /// Type for ticks
+    type Ticks;
 
     /// Start task 
     fn task_start(&mut self);
@@ -88,21 +88,21 @@ pub trait TimerCounter {
     /// Restart timer
     fn restart(&mut self) {
         
-        // Clear timer counter
-        self.task_clear();
-
         // Start timer counter
         self.task_start();
+
+        // Clear timer counter
+        self.task_clear();
     }
 
     /// Set compare and start timer
     fn set_compare_start(&mut self, idx: usize, compare: Self::Compare) -> Result<(), OverValueError<Self::Compare>> {
-        
-        // Reset compare event
-        self.reset_compare_event(idx);
 
         // Set compare value
         self.checked_set_compare(idx, compare)?;
+
+        // Reset compare event
+        self.reset_compare_event(idx);
         
         // Restart counter
         self.restart();
@@ -123,6 +123,22 @@ pub trait TimerCounter {
         self.task_stop();
 
         Ok(())
+    }
+
+    /// blocking wait for compare event
+    fn nb_wait(&mut self, idx: usize) -> nb::Result<(), Void> {
+
+        // Check for comparison event
+        if self.compare_event(idx) {
+
+            // Reset comparison event
+            self.reset_compare_event(idx);
+            Ok(())
+
+        } else {
+
+            Err(nb::Error::WouldBlock)
+        }
     }
 }
 
@@ -247,6 +263,9 @@ macro_rules! timers {
                 /// Construct TIMER based timer with prescaler
                 pub fn new(timer: $TIM, prescaler: u8) -> Timer<Generic, $TIM> {
 
+                    // Shorts appear to be disabled on start-up, further thought
+                    // is needed to decide if they should be disabled here.
+
                     // Stop timer
                     timer.tasks_stop.write(|w| unsafe { w.bits(1) });
 
@@ -279,6 +298,7 @@ macro_rules! timers {
 
                 type Prescaler = u8;
                 type Compare = u32;
+                type Ticks = Hfticks;
 
                 /// Start timer
                 /// Unknown start jitter
@@ -443,6 +463,7 @@ macro_rules! rtcs {
 
                 type Prescaler = u16;
                 type Compare = u32;
+                type Ticks = Lfticks;
 
                 /// Start timer
                 /// first count:

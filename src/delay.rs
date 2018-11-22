@@ -1,10 +1,10 @@
 //! Delays
 
-use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
 use hal::blocking::delay::{DelayMs, DelayUs};
 
-pub use timer_counter::{Timer, TimerCounter, Generic, Delay};
+pub use nrf51::{TIMER0, TIMER1, TIMER2, RTC0, RTC1};
 pub use time::{Micros, Millis, Hertz};
+pub use timer_counter::{Timer, TimerCounter, Generic, Delay};
 
 
 macro_rules! delay {
