@@ -135,7 +135,7 @@ where SPI:SpiExt {
     }
 
     /// send should be called exactly the same number of times as read
-    /// nrf51 is doubel bufferd, two writes can be written before data
+    /// nrf51 is double buffered, two bytes can be written before data
     /// must be read
     fn send(&mut self, byte: u8) -> nb::Result<(), Self::Error> {
         self.spi.txd.write(|w| unsafe { w.bits(u32::from(byte)) });
