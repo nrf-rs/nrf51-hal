@@ -17,3 +17,4 @@ pub mod prelude;
 pub mod rng;
 pub mod serial;
 pub mod timer;
+pub mod spi;
