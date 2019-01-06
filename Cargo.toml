@@ -17,7 +17,7 @@ license = "0BSD"
 name = "nrf51-hal"
 readme = "README.md"
 repository = "https://github.com/nrf-rs/nrf51-hal"
-version = "0.6.0"
+version = "0.6.1"
 
 [dependencies]
 cortex-m = "0.5.8"
