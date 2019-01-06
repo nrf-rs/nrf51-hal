@@ -104,12 +104,6 @@ impl I2c<TWI1> {
     fn recv_byte(&self) -> Result<u8, Error> {
         let twi = &self.i2c;
 
-        /* Clear reception event */
-        twi.events_rxdready.write(|w| unsafe { w.bits(0) });
-
-        /* Start data reception */
-        twi.tasks_startrx.write(|w| unsafe { w.bits(1) });
-
         /* Wait until something ended up in the buffer */
         while twi.events_rxdready.read().bits() == 0 {
             /* Bail out if it's an error instead of data */
@@ -175,21 +169,27 @@ impl WriteRead for I2c<TWI1> {
             /* If we want to read multiple bytes we need to use the suspend mode */
             if !before.is_empty() {
                 twi.shorts.write(|w| w.bb_suspend().enabled());
+            } else {
+                twi.shorts.write(|w| w.bb_stop().enabled());
             }
+
+            /* Clear reception event */
+            twi.events_rxdready.write(|w| unsafe { w.bits(0) });
+
+            /* Start data reception */
+            twi.tasks_startrx.write(|w| unsafe { w.bits(1) });
 
             for in_ in &mut before.into_iter() {
-                *in_ = self.recv_byte()?;
-
                 twi.tasks_resume.write(|w| unsafe { w.bits(1) });
+                *in_ = self.recv_byte()?;
             }
 
-            twi.shorts
-                .write(|w| w.bb_suspend().disabled().bb_stop().enabled());
-
+            twi.shorts.write(|w| w.bb_stop().enabled());
+            twi.tasks_resume.write(|w| unsafe { w.bits(1) });
             *last = self.recv_byte()?;
+        } else {
+            self.send_stop()?;
         }
-
-        self.send_stop()?;
         Ok(())
     }
 }
