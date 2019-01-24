@@ -4,8 +4,9 @@
 use gpio::gpio::PIN;
 use gpio::{Input, Floating,Output,PushPull};
 use nrf51::{SPI0,SPI1,spi0};
+
+extern crate  embedded_hal;
 use hal::spi::FullDuplex;
-use hal::blocking::spi::Transfer;
 
 use core::ops::Deref;
 
@@ -97,20 +98,26 @@ where SPI:SpiExt
          self.pins
     }
 }
-
-impl<SPI> Transfer<u8> for Spi<SPI>
-where SPI:SpiExt
+/// Default implementation
+impl<X> embedded_hal::blocking::spi::write::Default<u8> for Spi<X>
+where Spi<X>:FullDuplex<u8>,
+      X:SpiExt
 {
-   type Error = Error;
-
-    fn transfer<'w>(&mut self, words: &'w mut [u8]) -> Result<&'w [u8], Error> {
-        for word in words.iter_mut() {
-            block!(self.send(word.clone()))?;
-            *word = block!(FullDuplex::read(self))?;
-        }
-        Ok(words)
-    }
 }
+/// Default implementation
+impl<X> embedded_hal::blocking::spi::write_iter::Default<u8> for Spi<X>
+where Spi<X>:FullDuplex<u8>,
+      X:SpiExt
+{
+}
+/// Default implementaion
+impl<X> embedded_hal::blocking::spi::transfer::Default<u8> for Spi<X>
+where Spi<X>:FullDuplex<u8>,
+      X:SpiExt
+{
+}
+
+
 
 impl<SPI> FullDuplex<u8> for Spi<SPI>
 where SPI:SpiExt {
