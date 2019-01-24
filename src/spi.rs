@@ -5,7 +5,7 @@ use gpio::gpio::PIN;
 use gpio::{Input, Floating,Output,PushPull};
 use nrf51::{SPI0,SPI1,spi0};
 
-extern crate  embedded_hal;
+use hal::blocking::spi::{transfer,write,write_iter};
 use hal::spi::FullDuplex;
 
 use core::ops::Deref;
@@ -99,19 +99,19 @@ where SPI:SpiExt
     }
 }
 /// Default implementation
-impl<X> embedded_hal::blocking::spi::write::Default<u8> for Spi<X>
+impl<X> write::Default<u8> for Spi<X>
 where Spi<X>:FullDuplex<u8>,
       X:SpiExt
 {
 }
 /// Default implementation
-impl<X> embedded_hal::blocking::spi::write_iter::Default<u8> for Spi<X>
+impl<X> write_iter::Default<u8> for Spi<X>
 where Spi<X>:FullDuplex<u8>,
       X:SpiExt
 {
 }
 /// Default implementaion
-impl<X> embedded_hal::blocking::spi::transfer::Default<u8> for Spi<X>
+impl<X> transfer::Default<u8> for Spi<X>
 where Spi<X>:FullDuplex<u8>,
       X:SpiExt
 {
