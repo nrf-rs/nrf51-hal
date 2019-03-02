@@ -79,11 +79,11 @@ impl hal::serial::Read<u8> for Rx<UART0> {
         match uart.events_rxdrdy.read().bits() {
             0 => Err(nb::Error::WouldBlock),
             _ => {
-                // Read one 8bit value
-                let byte = uart.rxd.read().bits() as u8;
-
                 // Reset ready for receive event
                 uart.events_rxdrdy.reset();
+
+                // Read one 8bit value
+                let byte = uart.rxd.read().bits() as u8;
 
                 Ok(byte)
             }
@@ -102,11 +102,11 @@ impl hal::serial::Write<u8> for Tx<UART0> {
         let uart = unsafe { &*UART0::ptr() };
         // Are we ready for sending out next byte?
         if uart.events_txdrdy.read().bits() == 1 {
-            // Send byte
-            uart.txd.write(|w| unsafe { w.bits(u32::from(byte)) });
-
             // Reset ready for transmit event
             uart.events_txdrdy.reset();
+
+            // Send byte
+            uart.txd.write(|w| unsafe { w.bits(u32::from(byte)) });
 
             Ok(())
         } else {
