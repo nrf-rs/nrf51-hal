@@ -32,6 +32,9 @@ impl CountDown for Timer {
         assert!(duration.as_secs() < u64::from((u32::MAX - duration.subsec_micros()) / 1_000_000));
 
         let us = (duration.as_secs() as u32) * 1_000_000 + duration.subsec_micros();
+        // Stop the timer to make sure the event doesn't occur while we're
+        // setting things up (if start() is called more than once).
+        self.0.tasks_stop.write(|w| unsafe { w.bits(1) });
         self.0.cc[0].write(|w| unsafe { w.bits(us) });
 
         self.0.events_compare[0].reset();
