@@ -1,11 +1,11 @@
 //! Implementation of the embedded-hal `Delay` trait.
 
-use cast::u32;
 use nrf51::TIMER0;
 
 use hal::blocking::delay::{DelayMs, DelayUs};
 
-use crate::hi_res_timer::{HiResTimer, Nrf51Timer, TimerCc, TimerWidth};
+use crate::hi_res_timer::{HiResTimer, Nrf51Timer, TimerCc, TimerFrequency, TimerWidth};
+use crate::time::Hfticks;
 
 /// A TIMER peripheral as a delay provider.
 ///
@@ -15,16 +15,17 @@ use crate::hi_res_timer::{HiResTimer, Nrf51Timer, TimerCc, TimerWidth};
 /// # Panics
 ///
 /// `delay_ms()` and `delay_us()` panic if the requested time requires more
-/// 1mHz ticks than can be represented using the timer's bit-width (32-bit for
-/// TIMER0, giving approximately 71 minutes; 16-bit otherwise, giving
-/// approximately 65ms).
+/// ticks at the set frequency than can be represented using the timer's
+/// bit-width (32-bit for TIMER0, 16-bit otherwise). See `TimerFrequency` for
+/// a table of the effective time limits.
 ///
 /// # Example
 /// ```
 /// use embedded_hal::delay::DelayMs;
+/// use nrf51_hal::hi_res_timer::TimerFrequency;
 /// use nrf51_hal::delay::DelayTimer;
 /// let p = nrf51::Peripherals::take().unwrap();
-/// let mut timer0 = DelayTimer::new(p.TIMER0);
+/// let mut timer0 = DelayTimer::new(p.TIMER0, TimerFrequency::Freq1MHz);
 /// timer0.delay_ms(1000);
 /// ```
 pub struct DelayTimer<T: Nrf51Timer> {
@@ -37,9 +38,10 @@ impl<T: Nrf51Timer> DelayTimer<T> {
     /// Takes ownership of the TIMER peripheral.
     ///
     /// The TIMER is set to the greatest bit-width it supports, and the
-    /// default 1MHz frequency.
-    pub fn new(timer: T) -> Self {
+    /// specified frequency.
+    pub fn new(timer: T, frequency: TimerFrequency) -> Self {
         let mut hi_res_timer = timer.as_max_width_timer();
+        hi_res_timer.set_frequency(frequency);
         hi_res_timer.enable_auto_stop(TimerCc::CC0);
         DelayTimer { timer: hi_res_timer }
     }
@@ -49,10 +51,11 @@ impl<T: Nrf51Timer> DelayTimer<T> {
         self.timer.free()
     }
 
-    fn delay(&mut self, us: u32) {
-        let ticks = T::MaxWidth::try_from_u32(us).expect("TIMER compare value too wide");
+    fn delay(&mut self, hfticks: Hfticks) {
+        let ticks = self.timer.frequency().scale(hfticks.0)
+            .expect("TIMER compare value overflow");
+        let ticks = T::MaxWidth::try_from_u32(ticks).expect("TIMER compare value too wide");
         self.timer.clear();
-        // Default frequency is 1MHz, so we can use microseconds as ticks
         self.timer.set_compare_register(TimerCc::CC0, ticks);
         self.timer.start();
         while !self.timer.poll_compare_event(TimerCc::CC0) {}
@@ -61,37 +64,37 @@ impl<T: Nrf51Timer> DelayTimer<T> {
 
 impl<T: Nrf51Timer> DelayMs<u32> for DelayTimer<T> {
     fn delay_ms(&mut self, ms: u32) {
-        self.delay(ms.checked_mul(1000).expect("ms delay out of range"));
+        self.delay(Hfticks::from_ms(ms));
     }
 }
 
 impl<T: Nrf51Timer> DelayMs<u16> for DelayTimer<T> {
     fn delay_ms(&mut self, ms: u16) {
-        self.delay(u32(ms) * 1000);
+        self.delay_ms(u32::from(ms));
     }
 }
 
 impl<T: Nrf51Timer> DelayMs<u8> for DelayTimer<T> {
     fn delay_ms(&mut self, ms: u8) {
-        self.delay(u32(ms) * 1000);
+        self.delay_ms(u32::from(ms));
     }
 }
 
 impl<T: Nrf51Timer> DelayUs<u32> for DelayTimer<T> {
     fn delay_us(&mut self, us: u32) {
-        self.delay(us);
+        self.delay(Hfticks::from_us(us));
     }
 }
 
 impl<T: Nrf51Timer> DelayUs<u16> for DelayTimer<T> {
     fn delay_us(&mut self, us: u16) {
-        self.delay(u32(us));
+        self.delay_us(u32::from(us))
     }
 }
 
 impl<T: Nrf51Timer> DelayUs<u8> for DelayTimer<T> {
     fn delay_us(&mut self, us: u8) {
-        self.delay(u32(us));
+        self.delay_us(u32::from(us))
     }
 }
 
@@ -106,10 +109,49 @@ impl<T: Nrf51Timer> DelayUs<u8> for DelayTimer<T> {
 ///
 /// `Delay` is provided in addition to `DelayTimer` for backwards
 /// compatibility, and as a simple way to get an implementation of the
-/// embedded-hal delay traits if you don't care about choosing which timer to
-/// use.
+/// embedded-hal delay traits if you don't care about choosing which timer or
+/// frequency to use.
 ///
 /// # Panics
 ///
-/// `delay_ms()` panics if the requested time exceeds the maximum setting.
-pub type Delay = DelayTimer<TIMER0>;
+/// `delay_ms()` and `delay_us()` panic if the requested time exceeds the
+/// maximum setting.
+pub struct Delay(DelayTimer<TIMER0>);
+
+impl Delay {
+    /// Returns a new `Delay` wrapping TIMER0.
+    ///
+    /// Takes ownership of the TIMER0 peripheral.
+    pub fn new(timer: TIMER0) -> Delay {
+        Delay(DelayTimer::new(timer, TimerFrequency::Freq1MHz))
+    }
+
+    /// Gives the underlying `nrf51::TIMER0` instance back.
+    pub fn free(self) -> TIMER0 {
+        self.0.free()
+    }
+}
+
+impl DelayMs<u32> for Delay {
+    fn delay_ms(&mut self, ms: u32) { self.0.delay_ms(ms) }
+}
+
+impl DelayMs<u16> for Delay {
+    fn delay_ms(&mut self, ms: u16) { self.0.delay_ms(ms) }
+}
+
+impl DelayMs<u8> for Delay {
+    fn delay_ms(&mut self, ms: u8) { self.0.delay_ms(ms) }
+}
+
+impl DelayUs<u32> for Delay {
+    fn delay_us(&mut self, us: u32) { self.0.delay_us(us) }
+}
+
+impl DelayUs<u16> for Delay {
+    fn delay_us(&mut self, us: u16) { self.0.delay_us(us) }
+}
+
+impl DelayUs<u8> for Delay {
+    fn delay_us(&mut self, us: u8) { self.0.delay_us(us) }
+}

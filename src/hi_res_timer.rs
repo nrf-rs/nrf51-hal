@@ -10,7 +10,7 @@
 use core::marker::PhantomData;
 use core::ops::Deref;
 
-use cast::{u8, u16};
+use cast::{u8, u16, u32};
 
 use nrf51;
 
@@ -166,6 +166,18 @@ impl TimerFrequency {
             9 => TimerFrequency::Freq31250Hz,
             _ => panic!("prescaler out of range"),
         }
+    }
+
+    /// Apply the effective prescaler value.
+    ///
+    /// Converts a number of ticks of the base 16MHz clock to the equivalent
+    /// number of ticks for a timer using this frequency.
+    ///
+    /// Rounds down.
+    ///
+    /// Returns `None` if the result doesn't fit in a u32.
+    pub fn scale(self, base_ticks: u64) -> Option<u32> {
+        u32(base_ticks >> self as u64).ok()
     }
 }
 
