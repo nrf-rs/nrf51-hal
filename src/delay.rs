@@ -1,11 +1,12 @@
-//! Implementation of the embedded-hal `Delay` trait.
+//! Implementations of the embedded-hal `Delay` trait.
 
 use nrf51::TIMER0;
 
 use hal::blocking::delay::{DelayMs, DelayUs};
 
 use crate::hi_res_timer::{HiResTimer, Nrf51Timer, TimerCc, TimerFrequency, TimerWidth};
-use crate::time::Hfticks;
+use crate::lo_res_timer::{LoResTimer, Nrf51Rtc, RtcCc, RtcFrequency};
+use crate::time::{Hfticks, Lfticks};
 
 /// A TIMER peripheral as a delay provider.
 ///
@@ -98,6 +99,97 @@ impl<T: Nrf51Timer> DelayUs<u8> for DelayTimer<T> {
     }
 }
 
+/// An RTC peripheral as a delay provider.
+///
+/// `DelayRTC` instances implement the embedded-hal `DelayMs` and `DelayUs`
+/// traits (for `u8`, `u16`, and `u32`).
+///
+/// # Panics
+///
+/// `delay_ms()` and `delay_us()` panic if the requested time requires 2^24 or
+/// more ticks at the set frequency. See `RtcFrequency` for a table of the
+/// effective time limits.
+///
+/// # Example
+/// ```
+/// use embedded_hal::delay::DelayMs;
+/// use nrf51_hal::lo_res_timer::FREQ_1024HZ;
+/// use nrf51_hal::delay::DelayRtc;
+/// let p = nrf51::Peripherals::take().unwrap();
+/// p.CLOCK.tasks_lfclkstart.write(|w| unsafe { w.bits(1) });
+/// while p.CLOCK.events_lfclkstarted.read().bits() == 0 {}
+/// p.CLOCK.events_lfclkstarted.reset();
+/// let mut rtc0 = DelayRtc::new(p.RTC0, FREQ_1024HZ);
+/// rtc0.delay_ms(1000);
+/// ```
+pub struct DelayRtc<T: Nrf51Rtc> {
+    timer: LoResTimer<T>,
+}
+
+impl<T: Nrf51Rtc> DelayRtc<T> {
+    /// Returns a new `DelayRtc` wrapping the passed RTC.
+    ///
+    /// Takes ownership of the RTC peripheral.
+    ///
+    /// The RTC is set to the specified frequency.
+    pub fn new(timer: T, frequency: RtcFrequency) -> Self {
+        let mut lo_res_timer = LoResTimer::new(timer);
+        lo_res_timer.set_frequency(frequency);
+        lo_res_timer.enable_compare_event(RtcCc::CC0);
+        DelayRtc { timer: lo_res_timer }
+    }
+
+    /// Gives the underlying `nrf51::RTC`*n* instance back.
+    pub fn free(self) -> T {
+        self.timer.free()
+    }
+
+    fn delay(&mut self, lfticks: Lfticks) {
+        let ticks = self.timer.frequency().scale(lfticks.0)
+            .expect("RTC compare value overflow");
+        self.timer.clear();
+        self.timer.set_compare_register(RtcCc::CC0, ticks);
+        self.timer.start();
+        while !self.timer.poll_compare_event(RtcCc::CC0) {}
+        self.timer.stop();
+    }
+}
+
+impl<T: Nrf51Rtc> DelayMs<u32> for DelayRtc<T> {
+    fn delay_ms(&mut self, ms: u32) {
+        self.delay(Lfticks::from_ms(ms));
+    }
+}
+
+impl<T: Nrf51Rtc> DelayMs<u16> for DelayRtc<T> {
+    fn delay_ms(&mut self, ms: u16) {
+        self.delay_ms(u32::from(ms));
+    }
+}
+
+impl<T: Nrf51Rtc> DelayMs<u8> for DelayRtc<T> {
+    fn delay_ms(&mut self, ms: u8) {
+        self.delay_ms(u32::from(ms));
+    }
+}
+
+impl<T: Nrf51Rtc> DelayUs<u32> for DelayRtc<T> {
+    fn delay_us(&mut self, us: u32) {
+        self.delay(Lfticks::from_us(us));
+    }
+}
+
+impl<T: Nrf51Rtc> DelayUs<u16> for DelayRtc<T> {
+    fn delay_us(&mut self, us: u16) {
+        self.delay_us(u32::from(us))
+    }
+}
+
+impl<T: Nrf51Rtc> DelayUs<u8> for DelayRtc<T> {
+    fn delay_us(&mut self, us: u8) {
+        self.delay_us(u32::from(us))
+    }
+}
 
 /// System timer `TIMER0` as a delay provider.
 ///
