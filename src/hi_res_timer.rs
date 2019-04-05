@@ -68,7 +68,18 @@ impl TimerWidth for u32 {
 
 /// One of the nRF51's high-resolution timers (`nrf51::TIMER0`, `nrf51::TIMER1`,
 /// or `nrf51::TIMER2`)
-pub trait Nrf51Timer: Deref<Target = nrf51::timer0::RegisterBlock> + Sized {}
+pub trait Nrf51Timer: Deref<Target = nrf51::timer0::RegisterBlock> + Sized {
+    /// An unsigned integer type with the maximum bit-width supported by this
+    /// TIMER.
+    type MaxWidth: TimerWidth;
+
+    /// Takes ownership of the TIMER peripheral, returning a safe wrapper.
+    ///
+    /// Returns a `HiResTimer` with the maximum available bit-width.
+    ///
+    /// That is, 32-bit for TIMER0, 16-bit for TIMER1 or TIMER2.
+    fn as_max_width_timer(self) -> HiResTimer<Self, Self::MaxWidth>;
+}
 
 /// One of the TIMER Capture/Compare registers.
 ///
@@ -162,8 +173,8 @@ impl TimerFrequency {
 /// counter bit-width.
 ///
 /// To create a `HiResTimer` from one of the `nrf51::TIMER`*n* instances, use
-/// an appropriate trait and call one of the `as_8bit_timer()`,
-/// `as_16bit_timer()`, or `as_32bit_timer()` methods.
+/// an appropriate trait and call one of the `as_max_width_timer()`,
+/// `as_8bit_timer()`, `as_16bit_timer()`, or `as_32bit_timer()` methods.
 ///
 /// Creating a `HiResTimer` in this way stops the TIMER, sets the requested
 /// bit-width, and resets all other configuration to the defaults. In
@@ -176,6 +187,14 @@ impl TimerFrequency {
 /// `HiResTimer` doesn't support TIMER0's 24-bit mode.
 ///
 /// # Examples
+///
+/// ```ignore
+/// use nrf51_hal::hi_res_timer::Nrf51Timer;
+/// let p = nrf51::Peripherals::take().unwrap();
+/// let mut timer0 = p.TIMER0.as_max_width_timer(); // 32-bit
+/// let mut timer1 = p.TIMER1.as_max_width_timer(); // 16-bit
+/// let mut timer2 = p.TIMER2.as_max_width_timer(); // 16-bit
+/// ```
 ///
 /// ```ignore
 /// use nrf51_hal::hi_res_timer::As8BitTimer;
@@ -444,6 +463,23 @@ impl As16BitTimer for nrf51::TIMER1 {}
 impl As16BitTimer for nrf51::TIMER2 {}
 impl As32BitTimer for nrf51::TIMER0 {}
 
-impl Nrf51Timer for nrf51::TIMER0 {}
-impl Nrf51Timer for nrf51::TIMER1 {}
-impl Nrf51Timer for nrf51::TIMER2 {}
+impl Nrf51Timer for nrf51::TIMER0 {
+    type MaxWidth = u32;
+    fn as_max_width_timer(self) -> HiResTimer<nrf51::TIMER0, u32> {
+        self.as_32bit_timer()
+    }
+}
+
+impl Nrf51Timer for nrf51::TIMER1 {
+    type MaxWidth = u16;
+    fn as_max_width_timer(self) -> HiResTimer<nrf51::TIMER1, u16> {
+        self.as_16bit_timer()
+    }
+}
+
+impl Nrf51Timer for nrf51::TIMER2 {
+    type MaxWidth = u16;
+    fn as_max_width_timer(self) -> HiResTimer<nrf51::TIMER2, u16> {
+        self.as_16bit_timer()
+    }
+}
