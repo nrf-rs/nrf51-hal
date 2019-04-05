@@ -1,7 +1,6 @@
 //! Implementation of the embedded-hal `CountDown` trait.
 
 use core::time::Duration;
-use core::u32;
 
 use void::Void;
 
@@ -9,13 +8,15 @@ use hal::timer::{CountDown, Periodic};
 use nb::{Error, Result};
 use nrf51::TIMER0;
 
-use crate::hi_res_timer::{HiResTimer, Nrf51Timer, TimerCc, TimerWidth};
+use crate::hi_res_timer::{HiResTimer, Nrf51Timer, TimerCc, TimerFrequency, TimerWidth};
+use crate::time::Hfticks;
 
 /// A TIMER peripheral as a `CountDown` provider.
 ///
 /// `CountDownTimer` instances implement the embedded-hal `CountDown` trait.
 ///
-/// `start()` accepts a `Duration` value.
+/// `start()` accepts either a `Duration` value or an `Hfticks` value
+/// representing a number of nRF51 clock cycles.
 ///
 /// The timer is periodic (it implements the `Periodic` trait).
 ///
@@ -24,18 +25,20 @@ use crate::hi_res_timer::{HiResTimer, Nrf51Timer, TimerCc, TimerWidth};
 ///
 /// # Panics
 ///
-/// `start()` panics if the requested time requires more 1mHz ticks than can
-/// be represented using the timer's bit-width (32-bit for TIMER0, giving
-/// approximately 71 minutes; 16-bit otherwise, giving approximately 65ms).
+/// `start()` panics if the requested time requires more ticks at the set
+/// frequency than can be represented using the timer's bit-width (32-bit for
+/// TIMER0, 16-bit otherwise). See `TimerFrequency` for a table of the
+/// effective time limits.
 ///
 /// # Example
 /// ```
 /// use core::time::Duration;
 /// use embedded_hal::timer::CountDown;
 /// use nb::block;
+/// use nrf51_hal::hi_res_timer::TimerFrequency;
 /// use nrf51_hal::timer::CountdownTimer;
 /// let p = nrf51::Peripherals::take().unwrap();
-/// let mut timer0 = CountDownTimer::new(p.TIMER0);
+/// let mut timer0 = CountDownTimer::new(p.TIMER0, TimerFrequency::Freq1MHz);
 /// CountDown::start(&mut timer0, Duration::from_millis(1500));
 /// block!(timer0.wait());
 /// ```
@@ -49,9 +52,10 @@ impl<T: Nrf51Timer> CountDownTimer<T> {
     /// Takes ownership of the TIMER peripheral.
     ///
     /// The TIMER is set to the greatest bit-width it supports, and the
-    /// default 1MHz frequency.
-    pub fn new(timer: T) -> CountDownTimer<T> {
+    /// specified frequency.
+    pub fn new(timer: T, frequency: TimerFrequency) -> CountDownTimer<T> {
         let mut hi_res_timer = timer.as_max_width_timer();
+        hi_res_timer.set_frequency(frequency);
         hi_res_timer.enable_auto_clear(TimerCc::CC0);
         CountDownTimer { timer: hi_res_timer }
     }
@@ -63,17 +67,16 @@ impl<T: Nrf51Timer> CountDownTimer<T> {
 }
 
 impl<T: Nrf51Timer> CountDown for CountDownTimer<T> {
-    type Time = Duration;
+    type Time = Hfticks;
 
     fn start<D>(&mut self, count: D)
     where
         D: Into<Self::Time>,
     {
-        let duration = count.into();
-        assert!(duration.as_secs() < u64::from((u32::MAX - duration.subsec_micros()) / 1_000_000));
-        let us = (duration.as_secs() as u32) * 1_000_000 + duration.subsec_micros();
-        // Default frequency is 1MHz, so we can use microseconds as ticks
-        let ticks = T::MaxWidth::try_from_u32(us).expect("TIMER compare value too wide");
+        let hfticks = count.into();
+        let ticks = self.timer.frequency().scale(hfticks.0)
+            .expect("TIMER compare value overflow");
+        let ticks = T::MaxWidth::try_from_u32(ticks).expect("TIMER compare value too wide");
         // Stop the timer to make sure the event doesn't occur while we're
         // setting things up (if start() is called more than once).
         self.timer.stop();
@@ -109,7 +112,42 @@ impl<T: Nrf51Timer> Periodic for CountDownTimer<T> {}
 /// Calling `start()` more than once is permitted (whether or not `wait()` has
 /// already been called).
 ///
+/// `Timer` is provided in addition to `CountDownTimer` for backwards
+/// compatibility, and as a simple way to get an implementation of `CountDown`
+/// if you don't care about choosing which timer or frequency to use.
+///
 /// # Panics
 ///
 /// `start()` panics if the requested time exceeds the maximum setting.
-pub type Timer = CountDownTimer<TIMER0>;
+pub struct Timer(CountDownTimer<TIMER0>);
+
+impl Timer {
+    /// Returns a new `Timer` wrapping TIMER0.
+    ///
+    /// Takes ownership of the TIMER0 peripheral.
+    pub fn new(timer: TIMER0) -> Timer {
+        Timer(CountDownTimer::new(timer, TimerFrequency::Freq1MHz))
+    }
+
+    /// Gives the underlying `nrf51::TIMER0` instance back.
+    pub fn free(self) -> TIMER0 {
+        self.0.free()
+    }
+}
+
+impl CountDown for Timer {
+    type Time = Duration;
+
+    fn start<D>(&mut self, count: D)
+    where
+        D: Into<Self::Time>,
+    {
+        self.0.start(count.into());
+    }
+
+    fn wait(&mut self) -> Result<(), Void> {
+        self.0.wait()
+    }
+}
+
+impl Periodic for Timer {}
