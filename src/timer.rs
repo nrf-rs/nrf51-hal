@@ -1,4 +1,4 @@
-//! Implementation of the embedded-hal `CountDown` trait.
+//! Implementations of the embedded-hal `CountDown` trait.
 
 use core::time::Duration;
 
@@ -9,7 +9,8 @@ use nb::{Error, Result};
 use nrf51::TIMER0;
 
 use crate::hi_res_timer::{HiResTimer, Nrf51Timer, TimerCc, TimerFrequency, TimerWidth};
-use crate::time::Hfticks;
+use crate::lo_res_timer::{LoResTimer, Nrf51Rtc, RtcCc, RtcFrequency};
+use crate::time::{Hfticks, Lfticks};
 
 /// A TIMER peripheral as a `CountDown` provider.
 ///
@@ -97,6 +98,97 @@ impl<T: Nrf51Timer> CountDown for CountDownTimer<T> {
 
 impl<T: Nrf51Timer> Periodic for CountDownTimer<T> {}
 
+
+/// An RTC peripheral as a `CountDown` provider.
+///
+/// `CountDownRTC` instances implement the embedded-hal `CountDown` trait.
+///
+/// `start()` accepts either a `Duration` value or a `Lfticks` value
+/// representing a number of cycles of the nRF51's 32.768kHz LFCLK.
+///
+/// The timer is not periodic (doesn't implement the `Periodic` trait).
+///
+/// Calling `start()` more than once is permitted (whether or not `wait()` has
+/// already been called).
+///
+/// # Panics
+///
+/// `start()` panics if the requested time requires 2^24 or more ticks at the
+/// set frequency. See `RtcFrequency` for a table of the effective time
+/// limits.
+///
+/// `wait()` panics if it's called twice without an intervening `start()`.
+///
+/// # Example
+/// ```
+/// use core::time::Duration;
+/// use embedded_hal::timer::CountDown;
+/// use nb::block;
+/// use nrf51_hal::lo_res_timer::FREQ_1024HZ;
+/// use nrf51_hal::timer::CountdownRtc;
+/// let p = nrf51::Peripherals::take().unwrap();
+/// p.CLOCK.tasks_lfclkstart.write(|w| unsafe { w.bits(1) });
+/// while p.CLOCK.events_lfclkstarted.read().bits() == 0 {}
+/// p.CLOCK.events_lfclkstarted.reset();
+/// let mut rtc0 = CountDownRtc::new(p.RTC0, FREQ_1024HZ);
+/// CountDown::start(&mut rtc0, Duration::from_millis(1500));
+/// block!(rtc0.wait());
+/// ```
+pub struct CountDownRtc<T: Nrf51Rtc> {
+    timer: LoResTimer<T>,
+    wait_allowed: bool,
+}
+
+impl<T: Nrf51Rtc> CountDownRtc<T> {
+    /// Returns a new `CountDownRtc` wrapping the passed RTC.
+    ///
+    /// Takes ownership of the RTC peripheral.
+    ///
+    /// The RTC is set to the specified frequency.
+    pub fn new(timer: T, frequency: RtcFrequency) -> CountDownRtc<T> {
+        let mut lo_res_timer = LoResTimer::new(timer);
+        lo_res_timer.set_frequency(frequency);
+        lo_res_timer.enable_compare_event(RtcCc::CC0);
+        CountDownRtc { timer: lo_res_timer, wait_allowed: false}
+    }
+
+    /// Gives the underlying `nrf51::RTC`*n* instance back.
+    pub fn free(self) -> T {
+        self.timer.free()
+    }
+}
+
+impl<T: Nrf51Rtc> CountDown for CountDownRtc<T> {
+    type Time = Lfticks;
+
+    fn start<D>(&mut self, count: D)
+    where
+        D: Into<Self::Time>,
+    {
+        let lfticks = count.into();
+        let ticks = self.timer.frequency().scale(lfticks.0)
+            .expect("RTC compare value overflow");
+        // Stop the timer to make sure the event doesn't occur while we're
+        // setting things up.
+        self.timer.stop();
+        self.timer.clear_compare_event(RtcCc::CC0);
+        self.timer.set_compare_register(RtcCc::CC0, ticks);
+        self.timer.clear();
+        self.timer.start();
+        self.wait_allowed = true;
+    }
+
+    fn wait(&mut self) -> Result<(), Void> {
+        assert!(self.wait_allowed, "called wait() twice on nonperiodic timer");
+        if self.timer.poll_compare_event(RtcCc::CC0) {
+            self.wait_allowed = false;
+            self.timer.stop();
+            Ok(())
+        } else {
+            Err(Error::WouldBlock)
+        }
+    }
+}
 
 /// System timer `TIMER0` as a `CountDown` provider.
 ///

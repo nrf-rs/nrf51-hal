@@ -62,6 +62,24 @@ impl From<Duration> for Hfticks {
 #[derive(Debug, Clone, Copy)]
 pub struct Lfticks(pub u64);
 
+/// Converts a core::time::Duration to a number of ticks of the low-frequency
+/// clock.
+///
+/// Rounds down.
+///
+/// # Panics
+///
+/// Panics if the duration is longer than 2^32-1 seconds
+impl From<Duration> for Lfticks {
+    fn from(duration: Duration) -> Self {
+        let secs = u32(duration.as_secs()).expect("duration too long");
+        Lfticks(
+            duration.subsec_nanos() as u64 * LFCLK_HZ as u64 / 1_000_000_000 +
+            secs as u64 * LFCLK_HZ as u64
+        )
+    }
+}
+
 impl Lfticks {
     /// Converts a time in milliseconds to a number of ticks of the
     /// low-frequency clock.
