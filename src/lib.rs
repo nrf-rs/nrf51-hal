@@ -15,6 +15,7 @@ pub mod ecb;
 pub mod gpio;
 pub mod hi_res_timer;
 pub mod i2c;
+pub mod lo_res_timer;
 pub mod prelude;
 pub mod rng;
 pub mod serial;
