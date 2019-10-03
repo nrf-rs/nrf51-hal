@@ -4,7 +4,7 @@ use core::time::Duration;
 
 use void::Void;
 
-use hal::timer::{CountDown, Periodic};
+use embedded_hal::timer::{CountDown, Periodic};
 use nb::{Error, Result};
 use nrf51::TIMER0;
 
@@ -58,7 +58,9 @@ impl<T: Nrf51Timer> CountDownTimer<T> {
         let mut hi_res_timer = timer.as_max_width_timer();
         hi_res_timer.set_frequency(frequency);
         hi_res_timer.enable_auto_clear(TimerCc::CC0);
-        CountDownTimer { timer: hi_res_timer }
+        CountDownTimer {
+            timer: hi_res_timer,
+        }
     }
 
     /// Gives the underlying `nrf51::TIMER`*n* instance back.
@@ -75,7 +77,10 @@ impl<T: Nrf51Timer> CountDown for CountDownTimer<T> {
         D: Into<Self::Time>,
     {
         let hfticks = count.into();
-        let ticks = self.timer.frequency().scale(hfticks.0)
+        let ticks = self
+            .timer
+            .frequency()
+            .scale(hfticks.0)
             .expect("TIMER compare value overflow");
         let ticks = T::MaxWidth::try_from_u32(ticks).expect("TIMER compare value too wide");
         // Stop the timer to make sure the event doesn't occur while we're
@@ -97,7 +102,6 @@ impl<T: Nrf51Timer> CountDown for CountDownTimer<T> {
 }
 
 impl<T: Nrf51Timer> Periodic for CountDownTimer<T> {}
-
 
 /// An RTC peripheral as a `CountDown` provider.
 ///
@@ -149,7 +153,10 @@ impl<T: Nrf51Rtc> CountDownRtc<T> {
         let mut lo_res_timer = LoResTimer::new(timer);
         lo_res_timer.set_frequency(frequency);
         lo_res_timer.enable_compare_event(RtcCc::CC0);
-        CountDownRtc { timer: lo_res_timer, wait_allowed: false}
+        CountDownRtc {
+            timer: lo_res_timer,
+            wait_allowed: false,
+        }
     }
 
     /// Gives the underlying `nrf51::RTC`*n* instance back.
@@ -166,7 +173,10 @@ impl<T: Nrf51Rtc> CountDown for CountDownRtc<T> {
         D: Into<Self::Time>,
     {
         let lfticks = count.into();
-        let ticks = self.timer.frequency().scale(lfticks.0)
+        let ticks = self
+            .timer
+            .frequency()
+            .scale(lfticks.0)
             .expect("RTC compare value overflow");
         // Stop the timer to make sure the event doesn't occur while we're
         // setting things up.
@@ -179,7 +189,10 @@ impl<T: Nrf51Rtc> CountDown for CountDownRtc<T> {
     }
 
     fn wait(&mut self) -> Result<(), Void> {
-        assert!(self.wait_allowed, "called wait() twice on nonperiodic timer");
+        assert!(
+            self.wait_allowed,
+            "called wait() twice on nonperiodic timer"
+        );
         if self.timer.poll_compare_event(RtcCc::CC0) {
             self.wait_allowed = false;
             self.timer.stop();

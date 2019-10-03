@@ -10,7 +10,7 @@
 use core::marker::PhantomData;
 use core::ops::Deref;
 
-use cast::{u8, u16, u32};
+use cast::{u16, u32, u8};
 
 use nrf51;
 
@@ -246,7 +246,10 @@ pub struct HiResTimer<T: Nrf51Timer, Width: TimerWidth> {
 impl<T: Nrf51Timer, Width: TimerWidth> HiResTimer<T, Width> {
     // Private so that TIMER1 and TIMER2 can't be constructed with width u32.
     fn new(timer: T) -> HiResTimer<T, Width> {
-        let mut h = HiResTimer {timer, _width: PhantomData};
+        let mut h = HiResTimer {
+            timer,
+            _width: PhantomData,
+        };
         // Note prescaler and bitmode must be changed only when the timer is
         // stopped.
         h.stop();
@@ -264,10 +267,14 @@ impl<T: Nrf51Timer, Width: TimerWidth> HiResTimer<T, Width> {
         h.timer.events_compare[2].reset();
         h.timer.events_compare[3].reset();
         h.timer.intenclr.write(|w| {
-            w.compare0().clear()
-             .compare1().clear()
-             .compare2().clear()
-             .compare3().clear()
+            w.compare0()
+                .clear()
+                .compare1()
+                .clear()
+                .compare2()
+                .clear()
+                .compare3()
+                .clear()
         });
         h
     }
@@ -358,7 +365,9 @@ impl<T: Nrf51Timer, Width: TimerWidth> HiResTimer<T, Width> {
     /// same register.
     pub fn poll_compare_event(&mut self, register: TimerCc) -> bool {
         let fired = self.read_compare_event(register);
-        if fired { self.clear_compare_event(register) }
+        if fired {
+            self.clear_compare_event(register)
+        }
         fired
     }
 

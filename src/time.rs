@@ -7,7 +7,6 @@ use cast::u32;
 use crate::hi_res_timer::HFCLK_MHZ;
 use crate::lo_res_timer::LFCLK_HZ;
 
-
 /// A number of ticks of the nRF51 high-frequency clock (HFCLK).
 ///
 /// The clock frequency is 16MHz, so each tick is 62.5ns.
@@ -44,12 +43,11 @@ impl From<Duration> for Hfticks {
     fn from(duration: Duration) -> Self {
         let secs = u32(duration.as_secs()).expect("duration too long");
         Hfticks(
-            duration.subsec_nanos() as u64 * HFCLK_MHZ as u64 / 1000 +
-            secs as u64 * HFCLK_MHZ as u64 * 1_000_000
+            duration.subsec_nanos() as u64 * HFCLK_MHZ as u64 / 1000
+                + secs as u64 * HFCLK_MHZ as u64 * 1_000_000,
         )
     }
 }
-
 
 /// A number of ticks of the nRF51 low-frequency clock (LFCLK).
 ///
@@ -74,8 +72,8 @@ impl From<Duration> for Lfticks {
     fn from(duration: Duration) -> Self {
         let secs = u32(duration.as_secs()).expect("duration too long");
         Lfticks(
-            duration.subsec_nanos() as u64 * LFCLK_HZ as u64 / 1_000_000_000 +
-            secs as u64 * LFCLK_HZ as u64
+            duration.subsec_nanos() as u64 * LFCLK_HZ as u64 / 1_000_000_000
+                + secs as u64 * LFCLK_HZ as u64,
         )
     }
 }
@@ -97,4 +95,3 @@ impl Lfticks {
         Lfticks((us as u64 * LFCLK_HZ as u64) / 1_000_000)
     }
 }
-

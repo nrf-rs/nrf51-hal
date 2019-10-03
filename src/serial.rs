@@ -1,12 +1,10 @@
 use core::fmt::{Result, Write};
 use core::marker::PhantomData;
 
-use hal;
-use hal::prelude::*;
-use nb;
+use nb::block;
 
-use gpio::gpio::PIN;
-use gpio::{Floating, Input, Output, PushPull};
+use crate::gpio::gpio::PIN;
+use crate::gpio::{Floating, Input, Output, PushPull};
 use nrf51::UART0;
 use void::Void;
 
@@ -71,7 +69,7 @@ impl Serial<UART0> {
     }
 }
 
-impl hal::serial::Read<u8> for Rx<UART0> {
+impl embedded_hal::serial::Read<u8> for Rx<UART0> {
     type Error = Error;
 
     fn read(&mut self) -> nb::Result<u8, Self::Error> {
@@ -91,7 +89,7 @@ impl hal::serial::Read<u8> for Rx<UART0> {
     }
 }
 
-impl hal::serial::Write<u8> for Tx<UART0> {
+impl embedded_hal::serial::Write<u8> for Tx<UART0> {
     type Error = Void;
 
     fn flush(&mut self) -> nb::Result<(), Self::Error> {
@@ -118,14 +116,11 @@ impl hal::serial::Write<u8> for Tx<UART0> {
 
 impl<UART> Write for Tx<UART>
 where
-    Tx<UART>: hal::serial::Write<u8>,
+    Tx<UART>: embedded_hal::serial::Write<u8>,
 {
     fn write_str(&mut self, s: &str) -> Result {
-        let _ = s
-            .as_bytes()
-            .into_iter()
-            .map(|c| block!(self.write(*c)))
-            .last();
+        use embedded_hal::serial::Write;
+        let _ = s.as_bytes().iter().map(|c| block!(self.write(*c))).last();
         Ok(())
     }
 }

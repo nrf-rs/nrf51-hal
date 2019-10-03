@@ -1,4 +1,5 @@
 [package]
+edition = "2018"
 authors = ["Daniel Egger <daniel@eggers-club.de>"]
 categories = [
     "embedded",

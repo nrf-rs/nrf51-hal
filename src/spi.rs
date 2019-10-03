@@ -1,25 +1,25 @@
 //! HAL interface to the SPI peripheral
 //!
 
-use gpio::gpio::PIN;
-use gpio::{Input, Floating,Output,PushPull};
-use nrf51::{SPI0,SPI1,spi0};
+use crate::gpio::gpio::PIN;
+use crate::gpio::{Floating, Input, Output, PushPull};
+use nrf51::{spi0, SPI0, SPI1};
 
-use hal::blocking::spi::{transfer,write,write_iter};
-use hal::spi::FullDuplex;
+use embedded_hal::blocking::spi::{transfer, write, write_iter};
+use embedded_hal::spi::FullDuplex;
 
 use core::ops::Deref;
 
 /// SPI abstraction
-pub struct Spi<SPI>{
-    spi:SPI,
-    pins:Pins,
+pub struct Spi<SPI> {
+    spi: SPI,
+    pins: Pins,
 }
 
-pub struct Pins{
-    pub sck:    PIN<Output<PushPull>>,
-    pub mosi:   PIN<Output<PushPull>>,
-    pub miso:   PIN<Input<Floating>>
+pub struct Pins {
+    pub sck: PIN<Output<PushPull>>,
+    pub mosi: PIN<Output<PushPull>>,
+    pub miso: PIN<Input<Floating>>,
 }
 
 #[derive(Debug)]
@@ -28,7 +28,7 @@ pub enum Error {
     NACK,
 }
 
-pub trait SpiExt : Deref<Target=spi0::RegisterBlock> + Sized {
+pub trait SpiExt: Deref<Target = spi0::RegisterBlock> + Sized {
     fn constrain(self, pins: Pins) -> Spi<Self>;
 }
 
@@ -44,13 +44,11 @@ macro_rules! impl_spi_ext {
     }
 }
 
-impl_spi_ext!(
-    SPI0,
-    SPI1,
-);
+impl_spi_ext!(SPI0, SPI1,);
 
 impl<SPI> Spi<SPI>
-where SPI:SpiExt
+where
+    SPI: SpiExt,
 {
     /// Interface to a SPI instance
     ///
@@ -62,71 +60,69 @@ where SPI:SpiExt
     /// product specification for more details
 
     pub fn new(spi: SPI, pins: Pins) -> Self
-        where SPI:SpiExt {
+    where
+        SPI: SpiExt,
+    {
         // Select pins
-        spi.pselsck.write(|w| {
-            unsafe { w.bits(pins.sck.get_id().into()) }
-        });
-        spi.pselmosi.write(|w| {
-            unsafe { w.bits(pins.mosi.get_id().into()) }
-        });
-        spi.pselmiso.write(|w| {
-            unsafe { w.bits(pins.miso.get_id().into()) }
-        });
+        spi.pselsck
+            .write(|w| unsafe { w.bits(pins.sck.get_id().into()) });
+        spi.pselmosi
+            .write(|w| unsafe { w.bits(pins.mosi.get_id().into()) });
+        spi.pselmiso
+            .write(|w| unsafe { w.bits(pins.miso.get_id().into()) });
 
         // Enable SPIM instance
-        spi.enable.write(|w|
-            w.enable().enabled()
-        );
+        spi.enable.write(|w| w.enable().enabled());
 
         // Set to SPI mode 0
-        spi.config.write(|w|
-            w
-                .order().msb_first()
-                .cpha().leading()
-                .cpol().active_high()
-        );
+        spi.config
+            .write(|w| w.order().msb_first().cpha().leading().cpol().active_high());
 
         // Configure frequency
-        spi.frequency.write(|w|
-            w.frequency().m4() // 4MHz
+        spi.frequency.write(
+            |w| w.frequency().m4(), // 4MHz
         );
 
-        Spi{spi:spi, pins:pins}
+        Spi {
+            spi: spi,
+            pins: pins,
+        }
     }
     pub fn teardown(self) -> Pins {
-         self.pins
+        self.pins
     }
 }
 /// Default implementation
 impl<X> write::Default<u8> for Spi<X>
-where Spi<X>:FullDuplex<u8>,
-      X:SpiExt
+where
+    Spi<X>: FullDuplex<u8>,
+    X: SpiExt,
 {
 }
 /// Default implementation
 impl<X> write_iter::Default<u8> for Spi<X>
-where Spi<X>:FullDuplex<u8>,
-      X:SpiExt
+where
+    Spi<X>: FullDuplex<u8>,
+    X: SpiExt,
 {
 }
 /// Default implementaion
 impl<X> transfer::Default<u8> for Spi<X>
-where Spi<X>:FullDuplex<u8>,
-      X:SpiExt
+where
+    Spi<X>: FullDuplex<u8>,
+    X: SpiExt,
 {
 }
 
-
-
 impl<SPI> FullDuplex<u8> for Spi<SPI>
-where SPI:SpiExt {
+where
+    SPI: SpiExt,
+{
     type Error = Error;
 
     /// read must only be called after a send data have been issued
     /// as the interface will read and write at the same time
     fn read(&mut self) -> nb::Result<u8, Self::Error> {
-
         match self.spi.events_ready.read().bits() {
             0 => Err(nb::Error::WouldBlock),
             _ => {

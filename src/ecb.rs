@@ -53,9 +53,11 @@ impl AesEcb {
         };
 
         unsafe {
-            self.regs.events_endecb.reset();    // acknowledge left-over events
+            self.regs.events_endecb.reset(); // acknowledge left-over events
             self.regs.events_errorecb.reset();
-            self.regs.ecbdataptr.write(|w| w.bits(&mut buf as *mut _ as u32));
+            self.regs
+                .ecbdataptr
+                .write(|w| w.bits(&mut buf as *mut _ as u32));
             self.regs.tasks_startecb.write(|w| w.bits(1));
         }
 

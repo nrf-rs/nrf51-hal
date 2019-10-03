@@ -1,9 +1,9 @@
-use gpio::gpio::PIN;
-use gpio::{Input, OpenDrain};
+use crate::gpio::gpio::PIN;
+use crate::gpio::{Input, OpenDrain};
 use nrf51::twi0::frequency;
 use nrf51::TWI1;
 
-use hal::blocking::i2c::{Write, WriteRead};
+use embedded_hal::blocking::i2c::{Write, WriteRead};
 
 /// I2C abstraction
 pub struct I2c<I2C> {

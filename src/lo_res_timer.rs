@@ -235,11 +235,16 @@ impl<T: Nrf51Rtc> LoResTimer<T> {
         }
         l.rtc.evtenclr.write(|w| {
             let w = w
-                .tick().clear()
-                .ovrflw().clear()
-                .compare0().clear()
-                .compare1().clear()
-                .compare2().clear();
+                .tick()
+                .clear()
+                .ovrflw()
+                .clear()
+                .compare0()
+                .clear()
+                .compare1()
+                .clear()
+                .compare2()
+                .clear();
             if T::has_register(RtcCc::CC3) {
                 w.compare3().clear()
             } else {
@@ -248,11 +253,16 @@ impl<T: Nrf51Rtc> LoResTimer<T> {
         });
         l.rtc.intenclr.write(|w| {
             let w = w
-                .tick().clear()
-                .ovrflw().clear()
-                .compare0().clear()
-                .compare1().clear()
-                .compare2().clear();
+                .tick()
+                .clear()
+                .ovrflw()
+                .clear()
+                .compare0()
+                .clear()
+                .compare1()
+                .clear()
+                .compare2()
+                .clear();
             if T::has_register(RtcCc::CC3) {
                 w.compare3().clear()
             } else {
@@ -280,7 +290,9 @@ impl<T: Nrf51Rtc> LoResTimer<T> {
     /// Writes the prescaler register.
     pub fn set_frequency(&mut self, frequency: RtcFrequency) {
         self.stop();
-        self.rtc.prescaler.write(|w| unsafe { w.bits(frequency.as_prescaler()) });
+        self.rtc
+            .prescaler
+            .write(|w| unsafe { w.bits(frequency.as_prescaler()) });
     }
 
     /// Returns the RTC's current counter value.
@@ -458,7 +470,9 @@ impl<T: Nrf51Rtc> LoResTimer<T> {
     pub fn poll_compare_event(&mut self, register: RtcCc) -> bool {
         T::validate_register(register);
         let fired = self.read_compare_event(register);
-        if fired { self.clear_compare_event(register) }
+        if fired {
+            self.clear_compare_event(register)
+        }
         fired
     }
 
@@ -478,7 +492,9 @@ impl<T: Nrf51Rtc> LoResTimer<T> {
     /// since this method (or `clear_tick_event()`) was last called.
     pub fn poll_tick_event(&mut self) -> bool {
         let fired = self.read_tick_event();
-        if fired { self.clear_tick_event() }
+        if fired {
+            self.clear_tick_event()
+        }
         fired
     }
 
@@ -499,7 +515,9 @@ impl<T: Nrf51Rtc> LoResTimer<T> {
     /// called.
     pub fn poll_overflow_event(&mut self) -> bool {
         let fired = self.read_overflow_event();
-        if fired { self.clear_overflow_event() }
+        if fired {
+            self.clear_overflow_event()
+        }
         fired
     }
 }

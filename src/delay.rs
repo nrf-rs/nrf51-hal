@@ -2,7 +2,7 @@
 
 use nrf51::TIMER0;
 
-use hal::blocking::delay::{DelayMs, DelayUs};
+use embedded_hal::blocking::delay::{DelayMs, DelayUs};
 
 use crate::hi_res_timer::{HiResTimer, Nrf51Timer, TimerCc, TimerFrequency, TimerWidth};
 use crate::lo_res_timer::{LoResTimer, Nrf51Rtc, RtcCc, RtcFrequency};
@@ -44,7 +44,9 @@ impl<T: Nrf51Timer> DelayTimer<T> {
         let mut hi_res_timer = timer.as_max_width_timer();
         hi_res_timer.set_frequency(frequency);
         hi_res_timer.enable_auto_stop(TimerCc::CC0);
-        DelayTimer { timer: hi_res_timer }
+        DelayTimer {
+            timer: hi_res_timer,
+        }
     }
 
     /// Gives the underlying `nrf51::TIMER`*n* instance back.
@@ -53,7 +55,10 @@ impl<T: Nrf51Timer> DelayTimer<T> {
     }
 
     fn delay(&mut self, hfticks: Hfticks) {
-        let ticks = self.timer.frequency().scale(hfticks.0)
+        let ticks = self
+            .timer
+            .frequency()
+            .scale(hfticks.0)
             .expect("TIMER compare value overflow");
         let ticks = T::MaxWidth::try_from_u32(ticks).expect("TIMER compare value too wide");
         self.timer.clear();
@@ -136,7 +141,9 @@ impl<T: Nrf51Rtc> DelayRtc<T> {
         let mut lo_res_timer = LoResTimer::new(timer);
         lo_res_timer.set_frequency(frequency);
         lo_res_timer.enable_compare_event(RtcCc::CC0);
-        DelayRtc { timer: lo_res_timer }
+        DelayRtc {
+            timer: lo_res_timer,
+        }
     }
 
     /// Gives the underlying `nrf51::RTC`*n* instance back.
@@ -145,7 +152,10 @@ impl<T: Nrf51Rtc> DelayRtc<T> {
     }
 
     fn delay(&mut self, lfticks: Lfticks) {
-        let ticks = self.timer.frequency().scale(lfticks.0)
+        let ticks = self
+            .timer
+            .frequency()
+            .scale(lfticks.0)
             .expect("RTC compare value overflow");
         self.timer.clear();
         self.timer.set_compare_register(RtcCc::CC0, ticks);
@@ -225,25 +235,37 @@ impl Delay {
 }
 
 impl DelayMs<u32> for Delay {
-    fn delay_ms(&mut self, ms: u32) { self.0.delay_ms(ms) }
+    fn delay_ms(&mut self, ms: u32) {
+        self.0.delay_ms(ms)
+    }
 }
 
 impl DelayMs<u16> for Delay {
-    fn delay_ms(&mut self, ms: u16) { self.0.delay_ms(ms) }
+    fn delay_ms(&mut self, ms: u16) {
+        self.0.delay_ms(ms)
+    }
 }
 
 impl DelayMs<u8> for Delay {
-    fn delay_ms(&mut self, ms: u8) { self.0.delay_ms(ms) }
+    fn delay_ms(&mut self, ms: u8) {
+        self.0.delay_ms(ms)
+    }
 }
 
 impl DelayUs<u32> for Delay {
-    fn delay_us(&mut self, us: u32) { self.0.delay_us(us) }
+    fn delay_us(&mut self, us: u32) {
+        self.0.delay_us(us)
+    }
 }
 
 impl DelayUs<u16> for Delay {
-    fn delay_us(&mut self, us: u16) { self.0.delay_us(us) }
+    fn delay_us(&mut self, us: u16) {
+        self.0.delay_us(us)
+    }
 }
 
 impl DelayUs<u8> for Delay {
-    fn delay_us(&mut self, us: u8) { self.0.delay_us(us) }
+    fn delay_us(&mut self, us: u8) {
+        self.0.delay_us(us)
+    }
 }
