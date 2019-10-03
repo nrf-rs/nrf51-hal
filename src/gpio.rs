@@ -43,8 +43,9 @@ macro_rules! gpio {
         /// GPIO
         pub mod $gpiox {
             use core::marker::PhantomData;
+            use core::convert::Infallible;
 
-            use embedded_hal::digital::{InputPin, OutputPin, StatefulOutputPin};
+            use embedded_hal::digital::v2::{InputPin, OutputPin, StatefulOutputPin};
             use nrf51::$GPIOX;
 
             use super::{
@@ -79,36 +80,46 @@ macro_rules! gpio {
             }
 
             impl<MODE> StatefulOutputPin for $PXx<Output<MODE>> {
-                fn is_set_high(&self) -> bool {
-                    !self.is_set_low()
+                #[inline(always)]
+                fn is_set_high(&self) -> Result<bool, Self::Error> {
+                    self.is_set_low().map(|v| !v)
                 }
 
-                fn is_set_low(&self) -> bool {
+                #[inline(always)]
+                fn is_set_low(&self) -> Result<bool, Self::Error> {
                     // NOTE(unsafe) atomic read with no side effects
-                    unsafe { (*GPIO::ptr()).out.read().bits() & (1 << self.i) == 0 }
+                    Ok(unsafe { (*GPIO::ptr()).out.read().bits() & (1 << self.i) == 0 })
                 }
             }
 
             impl<MODE> OutputPin for $PXx<Output<MODE>> {
-                fn set_high(&mut self) {
+                type Error = Infallible;
+
+                #[inline(always)]
+                fn set_high(&mut self) -> Result<(), Self::Error> {
                     // NOTE(unsafe) atomic write to a stateless register
-                    unsafe { (*GPIO::ptr()).outset.write(|w| w.bits(1 << self.i)) }
+                    Ok(unsafe { (*GPIO::ptr()).outset.write(|w| w.bits(1 << self.i)) })
                 }
 
-                fn set_low(&mut self) {
+                #[inline(always)]
+                fn set_low(&mut self) -> Result<(), Self::Error> {
                     // NOTE(unsafe) atomic write to a stateless register
-                    unsafe { (*GPIO::ptr()).outclr.write(|w| w.bits(1 << self.i)) }
+                    Ok(unsafe { (*GPIO::ptr()).outclr.write(|w| w.bits(1 << self.i)) })
                 }
             }
 
             impl<MODE> InputPin for $PXx<Input<MODE>> {
-                fn is_high(&self) -> bool {
-                    !self.is_low()
+                type Error = Infallible;
+
+                #[inline(always)]
+                fn is_high(&self) -> Result<bool, Self::Error> {
+                    self.is_low().map(|v| !v)
                 }
 
-                fn is_low(&self) -> bool {
+                #[inline(always)]
+                fn is_low(&self) -> Result<bool, Self::Error> {
                     // NOTE(unsafe) atomic read with no side effects
-                    unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << self.i) == 0 }
+                    Ok(unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << self.i) == 0 })
                 }
             }
 
@@ -283,26 +294,31 @@ macro_rules! gpio {
                 }
 
                 impl<MODE> StatefulOutputPin for $PXi<Output<MODE>> {
-                    fn is_set_high(&self) -> bool {
-                        !self.is_set_low()
+                    #[inline(always)]
+                    fn is_set_high(&self) -> Result<bool, Self::Error> {
+                        self.is_set_low().map(|v| !v)
                     }
 
-                    fn is_set_low(&self) -> bool {
+                    #[inline(always)]
+                    fn is_set_low(&self) -> Result<bool, Self::Error> {
                         // NOTE(unsafe) atomic read with no side effects
-                        unsafe { (*GPIO::ptr()).out.read().bits() & (1 << $i) == 0 }
+                        Ok(unsafe { (*GPIO::ptr()).out.read().bits() & (1 << $i) == 0 })
                     }
                 }
 
                 impl<MODE> OutputPin for $PXi<Output<MODE>> {
-                    fn set_high(&mut self) {
+                    type Error = Infallible;
+
+                    #[inline(always)]
+                    fn set_high(&mut self) -> Result<(), Self::Error> {
                         // NOTE(unsafe) atomic write to a stateless register
-                        //unsafe { (*GPIO::ptr()).outset.write(|w| w.bits(1 << $i)) }
-                        unsafe { (*GPIO::ptr()).outset.write(|w| w.bits(1 << $i)) }
+                        Ok(unsafe { (*GPIO::ptr()).outset.write(|w| w.bits(1 << $i)) })
                     }
 
-                    fn set_low(&mut self) {
+                    #[inline(always)]
+                    fn set_low(&mut self) -> Result<(), Self::Error> {
                         // NOTE(unsafe) atomic write to a stateless register
-                        unsafe { (*GPIO::ptr()).outclr.write(|w| w.bits(1 << $i)) }
+                        Ok(unsafe { (*GPIO::ptr()).outclr.write(|w| w.bits(1 << $i)) })
                     }
                 }
 
@@ -311,6 +327,7 @@ macro_rules! gpio {
                     ///
                     /// This is useful when you want to collect the pins into an array where you
                     /// need all the elements to have the same type
+                    #[inline(always)]
                     pub fn downgrade(self) -> $PXx<Input<MODE>> {
                         $PXx {
                             i: $i,
@@ -320,13 +337,17 @@ macro_rules! gpio {
                 }
 
                 impl<MODE> InputPin for $PXi<Input<MODE>> {
-                    fn is_high(&self) -> bool {
-                        !self.is_low()
+                    type Error = Infallible;
+
+                    #[inline(always)]
+                    fn is_high(&self) -> Result<bool, Self::Error> {
+                        self.is_low().map(|v| !v)
                     }
 
-                    fn is_low(&self) -> bool {
+                    #[inline(always)]
+                    fn is_low(&self) -> Result<bool, Self::Error> {
                         // NOTE(unsafe) atomic read with no side effects
-                        unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << $i) == 0 }
+                       Ok(unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << $i) == 0 })
                     }
                 }
             )+
