@@ -24,12 +24,12 @@ pub enum Frequency {
     K400,
 }
 
-impl Into<frequency::FREQUENCYW> for Frequency {
-    fn into(self) -> frequency::FREQUENCYW {
+impl Into<frequency::FREQUENCY_A> for Frequency {
+    fn into(self) -> frequency::FREQUENCY_A {
         match self {
-            Frequency::K100 => frequency::FREQUENCYW::K100,
-            Frequency::K250 => frequency::FREQUENCYW::K250,
-            Frequency::K400 => frequency::FREQUENCYW::K400,
+            Frequency::K100 => frequency::FREQUENCY_A::K100,
+            Frequency::K250 => frequency::FREQUENCY_A::K250,
+            Frequency::K400 => frequency::FREQUENCY_A::K400,
         }
     }
 }

@@ -8,8 +8,7 @@ use crate::gpio::{Floating, Input, Output, PushPull};
 use nrf51::UART0;
 use void::Void;
 
-pub use nrf51::uart0::baudrate::BAUDRATEW;
-pub use nrf51::uart0::baudrate::BAUDRATEW::*;
+pub use nrf51::uart0::baudrate::BAUDRATE_A::{self, *};
 
 /// Serial abstraction
 pub struct Serial<UART> {
@@ -36,7 +35,7 @@ impl Serial<UART0> {
         uart: UART0,
         txpin: PIN<Output<PushPull>>,
         rxpin: PIN<Input<Floating>>,
-        speed: BAUDRATEW,
+        speed: BAUDRATE_A,
     ) -> Self {
         // Fill register with dummy data to trigger txd event
         uart.txd.write(|w| unsafe { w.bits(0) });
