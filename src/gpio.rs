@@ -280,6 +280,20 @@ macro_rules! gpio {
                     }
                 }
 
+                impl<MODE> From<$PXi<Output<MODE>>> for $PXx<Output<MODE>> {
+                    /// Erases the pin number from the type
+                    ///
+                    /// This is useful when you want to collect the pins into an array where you
+                    /// need all the elements to have the same type
+                    #[inline(always)]
+                    fn from(pin: $PXi<Output<MODE>>) -> $PXx<Output<MODE>> {
+                        $PXx {
+                            i: $i,
+                            _mode: pin._mode,
+                        }
+                    }
+                }
+
                 impl<MODE> $PXi<Output<MODE>> {
                     /// Erases the pin number from the type
                     ///
@@ -319,6 +333,20 @@ macro_rules! gpio {
                     fn set_low(&mut self) -> Result<(), Self::Error> {
                         // NOTE(unsafe) atomic write to a stateless register
                         Ok(unsafe { (*GPIO::ptr()).outclr.write(|w| w.bits(1 << $i)) })
+                    }
+                }
+
+                impl<MODE> From<$PXi<Input<MODE>>> for $PXx<Input<MODE>> {
+                    /// Erases the pin number from the type
+                    ///
+                    /// This is useful when you want to collect the pins into an array where you
+                    /// need all the elements to have the same type
+                    #[inline(always)]
+                    fn from(pin: $PXi<Input<MODE>>) -> $PXx<Input<MODE>> {
+                        $PXx {
+                            i: $i,
+                            _mode: pin._mode,
+                        }
                     }
                 }
 
