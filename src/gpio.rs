@@ -299,6 +299,7 @@ macro_rules! gpio {
                     ///
                     /// This is useful when you want to collect the pins into an array where you
                     /// need all the elements to have the same type
+                    #[deprecated(note = "Use `into` instead")]
                     pub fn downgrade(self) -> $PXx<Output<MODE>> {
                         $PXx {
                             i: $i,
@@ -355,6 +356,7 @@ macro_rules! gpio {
                     ///
                     /// This is useful when you want to collect the pins into an array where you
                     /// need all the elements to have the same type
+                    #[deprecated(note = "Use `into` instead")]
                     #[inline(always)]
                     pub fn downgrade(self) -> $PXx<Input<MODE>> {
                         $PXx {
