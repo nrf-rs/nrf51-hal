@@ -280,11 +280,26 @@ macro_rules! gpio {
                     }
                 }
 
+                impl<MODE> From<$PXi<Output<MODE>>> for $PXx<Output<MODE>> {
+                    /// Erases the pin number from the type
+                    ///
+                    /// This is useful when you want to collect the pins into an array where you
+                    /// need all the elements to have the same type
+                    #[inline(always)]
+                    fn from(pin: $PXi<Output<MODE>>) -> $PXx<Output<MODE>> {
+                        $PXx {
+                            i: $i,
+                            _mode: pin._mode,
+                        }
+                    }
+                }
+
                 impl<MODE> $PXi<Output<MODE>> {
                     /// Erases the pin number from the type
                     ///
                     /// This is useful when you want to collect the pins into an array where you
                     /// need all the elements to have the same type
+                    #[deprecated(note = "Use `into` instead")]
                     pub fn downgrade(self) -> $PXx<Output<MODE>> {
                         $PXx {
                             i: $i,
@@ -322,11 +337,26 @@ macro_rules! gpio {
                     }
                 }
 
+                impl<MODE> From<$PXi<Input<MODE>>> for $PXx<Input<MODE>> {
+                    /// Erases the pin number from the type
+                    ///
+                    /// This is useful when you want to collect the pins into an array where you
+                    /// need all the elements to have the same type
+                    #[inline(always)]
+                    fn from(pin: $PXi<Input<MODE>>) -> $PXx<Input<MODE>> {
+                        $PXx {
+                            i: $i,
+                            _mode: pin._mode,
+                        }
+                    }
+                }
+
                 impl<MODE> $PXi<Input<MODE>> {
                     /// Erases the pin number from the type
                     ///
                     /// This is useful when you want to collect the pins into an array where you
                     /// need all the elements to have the same type
+                    #[deprecated(note = "Use `into` instead")]
                     #[inline(always)]
                     pub fn downgrade(self) -> $PXx<Input<MODE>> {
                         $PXx {
