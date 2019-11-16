@@ -3,6 +3,7 @@
 
 pub use nrf51;
 
+pub mod adc;
 pub mod delay;
 pub mod ecb;
 pub mod gpio;
