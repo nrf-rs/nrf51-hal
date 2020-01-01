@@ -174,7 +174,7 @@ macro_rules! gpio {
                             w.dir()
                                 .input()
                                 .drive()
-                                .s0d1()
+                                .s0s1()
                                 .pull()
                                 .disabled()
                                 .sense()
@@ -236,7 +236,7 @@ macro_rules! gpio {
                             w.dir()
                                 .output()
                                 .drive()
-                                .s0d1()
+                                .s0s1()
                                 .pull()
                                 .disabled()
                                 .sense()
@@ -408,7 +408,6 @@ macro_rules! gpio {
                     fn is_low(&self) -> Result<bool, Self::Error> {
                         // NOTE(unsafe) atomic read with no side effects
                         Ok(unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << $i) == 0 })
-                        ret
                     }
                 }
             )+
