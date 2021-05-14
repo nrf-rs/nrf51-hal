@@ -1,3 +1,5 @@
+**This repository has been merged into https://github.com/nrf-rs/nrf-hal, development continues there**
+
 nrf51-hal
 =========
 
