@@ -123,6 +123,21 @@ macro_rules! gpio {
                 }
             }
 
+            impl InputPin for $PXx<Output<OpenDrain>> {
+                type Error = Infallible;
+
+                #[inline(always)]
+                fn is_high(&self) -> Result<bool, Self::Error> {
+                    self.is_low().map(|v| !v)
+                }
+
+                #[inline(always)]
+                fn is_low(&self) -> Result<bool, Self::Error> {
+                    // NOTE(unsafe) atomic read with no side effects
+                    Ok(unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << self.i) == 0 })
+                }
+            }
+
             $(
                 /// Pin
                 pub struct $PXi<MODE> {
@@ -159,7 +174,7 @@ macro_rules! gpio {
                             w.dir()
                                 .input()
                                 .drive()
-                                .s0d1()
+                                .s0s1()
                                 .pull()
                                 .disabled()
                                 .sense()
@@ -221,7 +236,7 @@ macro_rules! gpio {
                             w.dir()
                                 .output()
                                 .drive()
-                                .s0d1()
+                                .s0s1()
                                 .pull()
                                 .disabled()
                                 .sense()
@@ -378,6 +393,21 @@ macro_rules! gpio {
                     fn is_low(&self) -> Result<bool, Self::Error> {
                         // NOTE(unsafe) atomic read with no side effects
                        Ok(unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << $i) == 0 })
+                    }
+                }
+
+                impl InputPin for $PXi<Output<OpenDrain>> {
+                    type Error = Infallible;
+
+                    #[inline(always)]
+                    fn is_high(&self) -> Result<bool, Self::Error> {
+                        self.is_low().map(|v| !v)
+                    }
+
+                    #[inline(always)]
+                    fn is_low(&self) -> Result<bool, Self::Error> {
+                        // NOTE(unsafe) atomic read with no side effects
+                        Ok(unsafe { (*GPIO::ptr()).in_.read().bits() & (1 << $i) == 0 })
                     }
                 }
             )+
